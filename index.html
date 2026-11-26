@@ -406,12 +406,7 @@
         async function initApp() {
             try {
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-                session = await ort.InferenceSession.create('./best.onnx', {
-    externalData: [{
-        path: 'best.onnx.data',
-        url: './best.onnx.data'
-    }]
-});
+                session = await ort.InferenceSession.create('./best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
                 await startCamera(); // Uruchomienie aparatu po załadowaniu AI
             } catch (e) {
