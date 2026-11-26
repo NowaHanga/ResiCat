@@ -89,6 +89,33 @@
             text-shadow: 0 0 12px rgba(78, 204, 163, 0.4);
         }
 
+        /* Animowane 3 kropki jak na Messengerze podczas ładowania */
+        .messenger-dots {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        .messenger-dots span {
+            width: 7px;
+            height: 7px;
+            background-color: var(--accent-yellow);
+            border-radius: 50%;
+            display: inline-block;
+            animation: messengerBounce 1.4s infinite ease-in-out both;
+        }
+
+        .messenger-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .messenger-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .messenger-dots span:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes messengerBounce {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
         #reset-btn {
             display: none;
             background: var(--accent-pink);
@@ -120,14 +147,17 @@
             75% { transform: translate(2px, 1px); }
         }
 
-        @keyframes happyEarLeft {
+        /* Animacje ruszania uszu w stanie szukania */
+        @keyframes twitchEarLeft {
             0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(-10deg) translateY(-2px); }
+            30% { transform: rotate(-8deg) translateY(-1px); }
+            60% { transform: rotate(4deg); }
         }
 
-        @keyframes happyEarRight {
+        @keyframes twitchEarRight {
             0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(10deg) translateY(-2px); }
+            30% { transform: rotate(8deg) translateY(-1px); }
+            60% { transform: rotate(-4deg); }
         }
 
         @keyframes glowEyes {
@@ -144,12 +174,12 @@
             animation: lookAroundSafe 2.4s ease-in-out infinite;
         }
 
-        .found .ear-left-group {
-            animation: happyEarLeft 0.8s ease-in-out infinite;
+        .searching .ear-left-group {
+            animation: twitchEarLeft 2.5s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
-        .found .ear-right-group {
-            animation: happyEarRight 0.8s ease-in-out infinite;
+        .searching .ear-right-group {
+            animation: twitchEarRight 2.5s ease-in-out infinite;
             transform-origin: 178px 38px;
         }
 
@@ -271,7 +301,12 @@
     </header>
 
     <div class="top-bar">
-        <h1 id="status-text">SZUKAM...</h1>
+        <h1 id="status-text">
+            <span id="status-label">ŁADOWANIE</span>
+            <span id="messenger-loader" class="messenger-dots">
+                <span></span><span></span><span></span>
+            </span>
+        </h1>
         <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
     </div>
 
@@ -381,7 +416,6 @@
         const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
         async function initApp() {
-            // Natychmiastowe uruchomienie kamery, aby interfejs od razu żył
             await startCamera();
 
             try {
@@ -391,6 +425,7 @@
                 
                 session = await ort.InferenceSession.create('./best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
+                setSearchingUI(); // Przechodzimy do trybu "SZUKAM..." z kropkami
             } catch (e) {
                 console.error("Błąd ładowania modelu:", e);
                 document.getElementById('model-status').innerText = 'Błąd wczytywania best.onnx (sprawdź plik)';
@@ -405,12 +440,12 @@
                 video.srcObject = stream;
                 video.onloadedmetadata = () => {
                     isScanning = true;
-                    setSearchingUI();
                     scanLoop(); 
                 };
             } catch (err) {
                 console.error("Błąd kamery:", err);
-                document.getElementById('status-text').innerText = 'BRAK KAMERY';
+                document.getElementById('status-label').innerText = 'BRAK KAMERY';
+                document.getElementById('messenger-loader').style.display = 'none';
                 document.getElementById('model-status').innerText = 'Zezwól przeglądarce na dostęp do aparatu.';
             }
         }
@@ -443,10 +478,11 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.70); 
+                    // Obniżony próg pewności do 0.50, aby model bez problemu łapał paski w miejscu
+                    const detections = parseYOLOOutput(output, dims, 0.50); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    if (colorDetections.length >= 3) {
+                    if (colorDetections.length >= 2) {
                         colorDetections.sort((a, b) => a.x - b.x);
                         const currentSignature = colorDetections.map(d => d.label).join(',');
 
@@ -457,7 +493,8 @@
                             resistorStableCount = 1;
                         }
 
-                        if (resistorStableCount >= 4) {
+                        // Jeśli trzymasz w miejscu przez ok. 3-4 klatki, aplikacja natychmiast robi zdjęcie
+                        if (resistorStableCount >= 3) {
                             handleResistorFound(colorDetections); 
                             return;
                         }
@@ -469,7 +506,7 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 150); 
+            setTimeout(() => requestAnimationFrame(scanLoop), 120); 
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
@@ -578,9 +615,10 @@
             video.style.display = 'none';
             frozenCanvas.style.display = 'block';
 
-            const statusText = document.getElementById('status-text');
-            statusText.innerText = 'MAM!!!';
-            statusText.classList.add('found');
+            const statusLabel = document.getElementById('status-label');
+            statusLabel.innerText = 'MAM!!!';
+            document.getElementById('messenger-loader').style.display = 'none';
+            document.getElementById('status-text').classList.add('found');
 
             document.getElementById('reset-btn').style.display = 'block';
             document.getElementById('camera-box').classList.add('found');
@@ -625,9 +663,10 @@
         }
 
         function setSearchingUI() {
-            const statusText = document.getElementById('status-text');
-            statusText.innerText = 'SZUKAM...';
-            statusText.classList.remove('found');
+            const statusLabel = document.getElementById('status-label');
+            statusLabel.innerText = 'SZUKAM';
+            document.getElementById('messenger-loader').style.display = 'inline-flex';
+            document.getElementById('status-text').classList.remove('found');
 
             document.getElementById('reset-btn').style.display = 'none';
             document.getElementById('camera-box').classList.remove('found');
