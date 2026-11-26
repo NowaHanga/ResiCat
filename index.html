@@ -158,12 +158,9 @@
             transform-origin: center;
         }
 
-        .found .eyebrow-left-found {
-            transform: translateY(-8px) rotate(-12deg);
-            transition: transform 0.3s ease;
-        }
-        .found .eyebrow-right-found {
-            transform: translateY(-8px) rotate(12deg);
+        /* Symetryczne, idealnie równe uniesione brwi w trybie sukcesu */
+        .found .eyebrow-found-sym {
+            transform: translateY(-8px);
             transition: transform 0.3s ease;
         }
 
@@ -282,14 +279,16 @@
                 <path d="M 190 45 L 178 8 L 150 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
             </g>
             
+            <!-- Standardowe brwi do szukania -->
             <g id="eyebrows-searching">
                 <ellipse class="eyebrow-left" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
                 <ellipse class="eyebrow-right" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
             </g>
 
-            <g id="eyebrows-found" style="display: none;">
-                <ellipse class="eyebrow-left-found" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
-                <ellipse class="eyebrow-right-found" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
+            <!-- Idealnie symetryczne, uniesione brwi w trybie MAM!!! -->
+            <g id="eyebrows-found" class="eyebrow-found-sym" style="display: none;">
+                <ellipse cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
+                <ellipse cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
             </g>
 
             <g id="eyes-searching">
@@ -431,14 +430,13 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.45); 
+                    const detections = parseYOLOOutput(output, dims, 0.40); 
 
-                    // Jeśli model wykryje przynajmniej 2 lub więcej pasków kolorów na ekranie, traktujemy to jako obecność rezystora
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
                     if (colorDetections.length >= 2) {
                         resistorStableCount++;
-                        if (resistorStableCount >= 3) {
+                        if (resistorStableCount >= 2) {
                             handleResistorFound(colorDetections); 
                             return;
                         }
@@ -474,7 +472,6 @@
                 if (maxScore > confThreshold) {
                     const label = CLASS_NAMES[classId] || `Klasa #${classId}`;
                     const xCenter = data[i]; 
-                    // Unikalne paski (jeśli model wykryje ten sam kolor wielokrotnie, bierzemy najpewniejszy)
                     if (!found.some(item => item.label === label)) {
                         found.push({
                             label: label,
@@ -488,16 +485,14 @@
         }
 
         function calculateResistor(bands) {
-            // Sortowanie od lewej do prawej
+            // Sortowanie od lewej do prawej na osi X
             bands.sort((a, b) => a.x - b.x);
 
-            // Reguła czytania od strony gdzie paski są bliżej krawędzi / tolerancja po prawej (Złoty/Srebrny)
-            const lastLabel = bands[bands.length - 1].label;
-            if (bands.length > 2 && (lastLabel !== "Złoty" && lastLabel !== "Srebrny")) {
-                const firstLabel = bands[0].label;
-                if (firstLabel === "Złoty" || firstLabel === "Srebrny") {
-                    bands.reverse();
-                }
+            // Poprawiona logika odczytu: jeśli na końcu znajduje się złoty/srebrny (tolerancja), zostawiamy bez zmian.
+            // Jeśli złoty/srebrny omyłkowo wylądował na samym początku, odwracamy kierunek.
+            const firstLabel = bands[0].label;
+            if (bands.length > 2 && (firstLabel === "Złoty" || firstLabel === "Srebrny")) {
+                bands.reverse();
             }
 
             let ohms = 0;
