@@ -33,7 +33,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .app-title {
@@ -64,18 +64,49 @@
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         }
 
-        .top-bar {
+        /* Górny panel narzędziowy (latarka + status) */
+        .controls-bar {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 15px;
+            gap: 12px;
             margin-bottom: 5px;
             min-height: 45px;
             flex-wrap: wrap;
+            width: 100%;
+            max-width: 340px;
+        }
+
+        #flashlight-btn {
+            background: var(--card-bg);
+            border: 2px solid #33334d;
+            color: var(--text-muted);
+            border-radius: 12px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        #flashlight-btn.active {
+            background: rgba(255, 211, 105, 0.15);
+            border-color: var(--accent-yellow);
+            color: var(--accent-yellow);
+            box-shadow: 0 0 10px rgba(255, 211, 105, 0.3);
+        }
+
+        #status-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         #status-text {
-            font-size: 26px;
+            font-size: 24px;
             font-weight: 900;
             letter-spacing: 2px;
             color: var(--accent-yellow);
@@ -89,30 +120,30 @@
             text-shadow: 0 0 12px rgba(78, 204, 163, 0.4);
         }
 
+        /* Spowolnione, płynne 3 kropki ładowania */
         .messenger-dots {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            margin-left: 6px;
             vertical-align: middle;
         }
 
         .messenger-dots span {
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
             background-color: var(--accent-yellow);
             border-radius: 50%;
             display: inline-block;
-            animation: messengerBounce 1.4s infinite ease-in-out both;
+            animation: messengerBounce 2.2s infinite ease-in-out both;
         }
 
-        .messenger-dots span:nth-child(1) { animation-delay: -0.32s; }
-        .messenger-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .messenger-dots span:nth-child(1) { animation-delay: -0.4s; }
+        .messenger-dots span:nth-child(2) { animation-delay: -0.2s; }
         .messenger-dots span:nth-child(3) { animation-delay: 0s; }
 
         @keyframes messengerBounce {
-            0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
-            40% { transform: scale(1); opacity: 1; }
+            0%, 80%, 100% { transform: scale(0.4); opacity: 0.3; }
+            40% { transform: scale(1.1); opacity: 1; }
         }
 
         #reset-btn {
@@ -137,23 +168,23 @@
         .cat-container {
             width: 240px;
             height: 160px;
-            margin: 5px auto 10px auto;
+            margin: 0px auto 5px auto;
         }
 
-        /* Płynne, naturalne animacje uszu (użycie cubic-bezier dla płynności) */
+        /* Absolutnie płynne animacje uszu i oczu bez klatkowania */
         @keyframes smoothTwitchLeft {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(-10deg) translateY(-2px); }
+            0%, 100% { transform: rotate(0deg) translateY(0); }
+            50% { transform: rotate(-8deg) translateY(-2px); }
         }
 
         @keyframes smoothTwitchRight {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(10deg) translateY(-2px); }
+            0%, 100% { transform: rotate(0deg) translateY(0); }
+            50% { transform: rotate(8deg) translateY(-2px); }
         }
 
         @keyframes lookAroundSmooth {
             0%, 100% { transform: translate(0px, 0px); }
-            50% { transform: translate(-3px, 1px); }
+            50% { transform: translate(-2.5px, 0.8px); }
         }
 
         @keyframes glowEyes {
@@ -162,20 +193,20 @@
         }
 
         .searching .pupils-moving {
-            animation: lookAroundSmooth 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation: lookAroundSmooth 4s ease-in-out infinite;
         }
 
         .ear-left-group {
-            animation: smoothTwitchLeft 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation: smoothTwitchLeft 3s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
         .ear-right-group {
-            animation: smoothTwitchRight 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation: smoothTwitchRight 3s ease-in-out infinite;
             transform-origin: 178px 38px;
         }
 
         .found .happy-eyes-anim {
-            animation: glowEyes 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            animation: glowEyes 2s ease-in-out infinite;
             transform-origin: center;
         }
 
@@ -235,7 +266,7 @@
             border-left: 5px solid var(--accent-mint);
             border-radius: 14px;
             padding: 16px 18px;
-            margin-top: 18px;
+            margin-top: 15px;
             box-sizing: border-box;
             text-align: left;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
@@ -267,7 +298,7 @@
         }
 
         #model-status {
-            margin-top: 12px;
+            margin-top: 10px;
             font-size: 12px;
             color: var(--text-muted);
             text-align: center;
@@ -291,14 +322,23 @@
         </h1>
     </header>
 
-    <div class="top-bar">
-        <h1 id="status-text">
-            <span id="status-label">ŁADOWANIE</span>
-            <span id="messenger-loader" class="messenger-dots">
-                <span></span><span></span><span></span>
-            </span>
-        </h1>
-        <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
+    <!-- Pasek sterowania z latarką i statusem -->
+    <div class="controls-bar">
+        <button id="flashlight-btn" onclick="toggleFlashlight()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path>
+            </svg>
+            Latarka
+        </button>
+        <div id="status-container">
+            <h1 id="status-text">
+                <span id="status-label">ŁADOWANIE</span>
+                <span id="messenger-loader" class="messenger-dots">
+                    <span></span><span></span><span></span>
+                </span>
+            </h1>
+            <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
+        </div>
     </div>
 
     <div id="cat-wrapper" class="cat-container searching">
@@ -401,6 +441,9 @@
         let isScanning = false; 
         let resistorStableCount = 0; 
         let lastBandsSignature = ""; 
+        let mediaStream = null;
+        let torchOn = false;
+
         const video = document.getElementById('webcam');
         const frozenCanvas = document.getElementById('frozen-frame');
         const aiCanvas = document.getElementById('ai-canvas');
@@ -425,10 +468,10 @@
 
         async function startCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+                mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'environment' } 
                 });
-                video.srcObject = stream;
+                video.srcObject = mediaStream;
                 video.onloadedmetadata = () => {
                     isScanning = true;
                     scanLoop(); 
@@ -438,6 +481,33 @@
                 document.getElementById('status-label').innerText = 'BRAK KAMERY';
                 document.getElementById('messenger-loader').style.display = 'none';
                 document.getElementById('model-status').innerText = 'Zezwól przeglądarce na dostęp do aparatu.';
+            }
+        }
+
+        // Obsługa latarki (flesza w telefonie)
+        async function toggleFlashlight() {
+            if (!mediaStream) return;
+            const track = mediaStream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+
+            if (!capabilities.torch) {
+                alert("Twoja przeglądarka lub urządzenie nie obsługuje latarki w ten sposób.");
+                return;
+            }
+
+            try {
+                torchOn = !torchOn;
+                await track.applyConstraints({
+                    advanced: [{ torch: torchOn }]
+                });
+                const btn = document.getElementById('flashlight-btn');
+                if (torchOn) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            } catch (err) {
+                console.error("Nie udało się włączyć latarki:", err);
             }
         }
 
@@ -469,18 +539,18 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.50); 
+                    const detections = parseYOLOOutput(output, dims, 0.55); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    // Rygorystyczne zabezpieczenie przed klawiaturą/tłem:
-                    // Wymagamy minimum 3 pasków, które są w miarę blisko siebie w poziomie (tworzą rezystor, a nie losowe obiekty po bokach ekranu)
+                    // Rygorystyczny filtr geometryczny odrzucający klawiaturę i tło:
+                    // Paski muszą układać się w logiczny ciąg o odpowiedniej szerokości w kadrze
                     if (colorDetections.length >= 3) {
                         colorDetections.sort((a, b) => a.x - b.x);
                         
-                        // Sprawdzamy rozpiętość X (paski muszą być skupione w jednym miejscu jak rezystor)
                         const spanX = colorDetections[colorDetections.length - 1].x - colorDetections[0].x;
                         
-                        if (spanX > 0.03 && spanX < 0.45) {
+                        // Paski rezystora muszą zajmować spójny fragment kadru (unikamy wykrywania losowych przedmiotów na skrajach)
+                        if (spanX > 0.04 && spanX < 0.40) {
                             const currentSignature = colorDetections.map(d => d.label).join(',');
 
                             if (currentSignature === lastBandsSignature) {
@@ -490,8 +560,8 @@
                                 resistorStableCount = 1;
                             }
 
-                            // Po stabilnym przytrzymaniu w miejscu przez ok. 3-4 klatki aplikacja łapie odczyt
-                            if (resistorStableCount >= 3) {
+                            // Wymóg stabilnego przytrzymania w miejscu przez ok. 4 klatki
+                            if (resistorStableCount >= 4) {
                                 handleResistorFound(colorDetections); 
                                 return;
                             }
@@ -504,7 +574,7 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 100); 
+            setTimeout(() => requestAnimationFrame(scanLoop), 120); 
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
@@ -622,7 +692,7 @@
             document.getElementById('camera-box').classList.add('found');
 
             const cat = document.getElementById('cat-wrapper');
-            // Zostawiamy klasę, żeby uszy nadal płynnie tańczyły z radości w trybie MAM!!!
+            // Kot zostaje w klasie searching/found, ale zachowujemy płynny ruch uszu
             cat.classList.remove('searching');
             cat.classList.add('found');
 
