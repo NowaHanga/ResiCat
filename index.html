@@ -354,7 +354,6 @@
             "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
         ];
 
-        // Słownik wartości cyfrowych i mnożników dla kolorów pasków
         const COLOR_VALUES = {
             "Czarny": { digit: 0, mult: 1, tempCoeff: 250 },
             "Brązowy": { digit: 1, mult: 10, tol: 1, tempCoeff: 100 },
@@ -432,12 +431,12 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.55); 
+                    const detections = parseYOLOOutput(output, dims, 0.45); 
 
-                    const hasResistor = detections.some(d => d.label === "Rezystor");
+                    // Jeśli model wykryje przynajmniej 2 lub więcej pasków kolorów na ekranie, traktujemy to jako obecność rezystora
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    if (hasResistor && colorDetections.length >= 3) {
+                    if (colorDetections.length >= 2) {
                         resistorStableCount++;
                         if (resistorStableCount >= 3) {
                             handleResistorFound(colorDetections); 
@@ -474,8 +473,8 @@
 
                 if (maxScore > confThreshold) {
                     const label = CLASS_NAMES[classId] || `Klasa #${classId}`;
-                    // Zapisujemy wykryty element wraz z jego pozycją X (boundingBox x_center), aby poprawnie posortować paski od lewej do prawej
-                    const xCenter = data[i]; // x_center w YOLO output
+                    const xCenter = data[i]; 
+                    // Unikalne paski (jeśli model wykryje ten sam kolor wielokrotnie, bierzemy najpewniejszy)
                     if (!found.some(item => item.label === label)) {
                         found.push({
                             label: label,
@@ -489,26 +488,26 @@
         }
 
         function calculateResistor(bands) {
-            // Sortujemy paski od lewej do prawej (wzdłuż osi X obrazu)
+            // Sortowanie od lewej do prawej
             bands.sort((a, b) => a.x - b.x);
 
-            // Sprawdzamy czy ostatni pasek to typowa tolerancja (Złoty / Srebrny / Brązowy) i zostawiamy po prawej
-            // Jeśli paski są czytane od tyłu (tolerancja z lewej), odwracamy tablicę
-            const lastBand = bands[bands.length - 1].label;
-            if (lastBand !== "Złoty" && lastBand !== "Srebrny" && bands[0].label === "Złoty" || bands[0].label === "Srebrny") {
-                bands.reverse();
+            // Reguła czytania od strony gdzie paski są bliżej krawędzi / tolerancja po prawej (Złoty/Srebrny)
+            const lastLabel = bands[bands.length - 1].label;
+            if (bands.length > 2 && (lastLabel !== "Złoty" && lastLabel !== "Srebrny")) {
+                const firstLabel = bands[0].label;
+                if (firstLabel === "Złoty" || firstLabel === "Srebrny") {
+                    bands.reverse();
+                }
             }
 
             let ohms = 0;
-            let tolerance = "±5%"; // Domyślnie brak/złoty
+            let tolerance = "±5%";
             let tempCoeff = null;
 
             if (bands.length >= 4) {
-                // Kod 4-paskowy: [Cyfra 1] [Cyfra 2] [Mnożnik] [Tolerancja]
                 const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
                 const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
                 const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                
                 ohms = (d1 * 10 + d2) * mult;
 
                 const tolColor = bands[3].label;
@@ -517,11 +516,9 @@
                 }
 
                 if (bands.length >= 5) {
-                    // Kod 5-paskowy: [Cyfra 1] [Cyfra 2] [Cyfra 3] [Mnożnik] [Tolerancja]
                     const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
                     const mult5 = COLOR_VALUES[bands[3].label]?.mult ?? 1;
                     ohms = (d1 * 100 + d2 * 10 + d3) * mult5;
-                    
                     const tolColor5 = bands[4].label;
                     if (COLOR_VALUES[tolColor5]?.tol !== undefined) {
                         tolerance = `±${COLOR_VALUES[tolColor5].tol}%`;
@@ -529,14 +526,12 @@
                 }
 
                 if (bands.length >= 6) {
-                    // Współczynnik temperaturowy na 6. pasku
                     const tcColor = bands[5].label;
                     if (COLOR_VALUES[tcColor]?.tempCoeff) {
                         tempCoeff = `${COLOR_VALUES[tcColor].tempCoeff} ppm/°C`;
                     }
                 }
             } else if (bands.length === 3) {
-                // 3 paski (domyślnie 20% tolerancji)
                 const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
                 const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
                 const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
@@ -544,7 +539,6 @@
                 tolerance = "±20%";
             }
 
-            // Ładne formatowanie omów (kilo / mega)
             let formattedResistance = ohms + " Ω";
             if (ohms >= 1000000) {
                 formattedResistance = (ohms / 1000000).toFixed(1).replace('.0', '') + " MΩ";
@@ -600,7 +594,7 @@
                 html += `<div class="info-row">Współczynnik TK: <span>${result.tempCoeff}</span></div>`;
             }
             html += `<hr style="border: 0; border-top: 1px solid #33334d; margin: 8px 0;">`;
-            html += `<div class="info-row" style="font-size: 13px; color: var(--text-muted);">Wykryte paski: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
+            html += `<div class="info-row" style="font-size: 13px; color: var(--text-muted);">Paski: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
             
             infoContent.innerHTML = html;
             infoCard.style.display = 'block';
