@@ -89,7 +89,6 @@
             text-shadow: 0 0 12px rgba(78, 204, 163, 0.4);
         }
 
-        /* Animowane 3 kropki jak na Messengerze podczas ładowania */
         .messenger-dots {
             display: inline-flex;
             align-items: center;
@@ -141,62 +140,54 @@
             margin: 5px auto 10px auto;
         }
 
-        @keyframes lookAroundSafe {
+        /* Płynne, naturalne animacje uszu (użycie cubic-bezier dla płynności) */
+        @keyframes smoothTwitchLeft {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-10deg) translateY(-2px); }
+        }
+
+        @keyframes smoothTwitchRight {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(10deg) translateY(-2px); }
+        }
+
+        @keyframes lookAroundSmooth {
             0%, 100% { transform: translate(0px, 0px); }
-            25% { transform: translate(-2px, 1px); }
-            75% { transform: translate(2px, 1px); }
-        }
-
-        /* Animacje ruszania uszu w stanie szukania */
-        @keyframes twitchEarLeft {
-            0%, 100% { transform: rotate(0deg); }
-            30% { transform: rotate(-8deg) translateY(-1px); }
-            60% { transform: rotate(4deg); }
-        }
-
-        @keyframes twitchEarRight {
-            0%, 100% { transform: rotate(0deg); }
-            30% { transform: rotate(8deg) translateY(-1px); }
-            60% { transform: rotate(-4deg); }
+            50% { transform: translate(-3px, 1px); }
         }
 
         @keyframes glowEyes {
             0%, 100% { filter: drop-shadow(0 0 2px var(--accent-mint)); transform: scale(1); }
-            50% { filter: drop-shadow(0 0 10px var(--accent-mint)); transform: scale(1.05); }
-        }
-
-        @keyframes happyBlink {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-3px); }
+            50% { filter: drop-shadow(0 0 10px var(--accent-mint)); transform: scale(1.04); }
         }
 
         .searching .pupils-moving {
-            animation: lookAroundSafe 2.4s ease-in-out infinite;
+            animation: lookAroundSmooth 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
 
-        .searching .ear-left-group {
-            animation: twitchEarLeft 2.5s ease-in-out infinite;
+        .ear-left-group {
+            animation: smoothTwitchLeft 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
             transform-origin: 52px 38px;
         }
-        .searching .ear-right-group {
-            animation: twitchEarRight 2.5s ease-in-out infinite;
+        .ear-right-group {
+            animation: smoothTwitchRight 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
             transform-origin: 178px 38px;
         }
 
         .found .happy-eyes-anim {
-            animation: glowEyes 1.5s ease-in-out infinite, happyBlink 1s ease-in-out infinite;
+            animation: glowEyes 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
             transform-origin: center;
         }
 
         .found .eyebrow-left-found {
             transform: translateY(-6px) rotate(-12deg);
             transform-origin: 70px 45px;
-            transition: transform 0.3s ease;
+            transition: transform 0.4s ease;
         }
         .found .eyebrow-right-found {
             transform: translateY(-6px) rotate(12deg);
             transform-origin: 160px 45px;
-            transition: transform 0.3s ease;
+            transition: transform 0.4s ease;
         }
 
         .camera-label {
@@ -425,7 +416,7 @@
                 
                 session = await ort.InferenceSession.create('./best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
-                setSearchingUI(); // Przechodzimy do trybu "SZUKAM..." z kropkami
+                setSearchingUI(); 
             } catch (e) {
                 console.error("Błąd ładowania modelu:", e);
                 document.getElementById('model-status').innerText = 'Błąd wczytywania best.onnx (sprawdź plik)';
@@ -478,25 +469,32 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    // Obniżony próg pewności do 0.50, aby model bez problemu łapał paski w miejscu
                     const detections = parseYOLOOutput(output, dims, 0.50); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    if (colorDetections.length >= 2) {
+                    // Rygorystyczne zabezpieczenie przed klawiaturą/tłem:
+                    // Wymagamy minimum 3 pasków, które są w miarę blisko siebie w poziomie (tworzą rezystor, a nie losowe obiekty po bokach ekranu)
+                    if (colorDetections.length >= 3) {
                         colorDetections.sort((a, b) => a.x - b.x);
-                        const currentSignature = colorDetections.map(d => d.label).join(',');
+                        
+                        // Sprawdzamy rozpiętość X (paski muszą być skupione w jednym miejscu jak rezystor)
+                        const spanX = colorDetections[colorDetections.length - 1].x - colorDetections[0].x;
+                        
+                        if (spanX > 0.03 && spanX < 0.45) {
+                            const currentSignature = colorDetections.map(d => d.label).join(',');
 
-                        if (currentSignature === lastBandsSignature) {
-                            resistorStableCount++;
-                        } else {
-                            lastBandsSignature = currentSignature;
-                            resistorStableCount = 1;
-                        }
+                            if (currentSignature === lastBandsSignature) {
+                                resistorStableCount++;
+                            } else {
+                                lastBandsSignature = currentSignature;
+                                resistorStableCount = 1;
+                            }
 
-                        // Jeśli trzymasz w miejscu przez ok. 3-4 klatki, aplikacja natychmiast robi zdjęcie
-                        if (resistorStableCount >= 3) {
-                            handleResistorFound(colorDetections); 
-                            return;
+                            // Po stabilnym przytrzymaniu w miejscu przez ok. 3-4 klatki aplikacja łapie odczyt
+                            if (resistorStableCount >= 3) {
+                                handleResistorFound(colorDetections); 
+                                return;
+                            }
                         }
                     } else {
                         resistorStableCount = Math.max(0, resistorStableCount - 1);
@@ -506,7 +504,7 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 120); 
+            setTimeout(() => requestAnimationFrame(scanLoop), 100); 
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
@@ -624,6 +622,7 @@
             document.getElementById('camera-box').classList.add('found');
 
             const cat = document.getElementById('cat-wrapper');
+            // Zostawiamy klasę, żeby uszy nadal płynnie tańczyły z radości w trybie MAM!!!
             cat.classList.remove('searching');
             cat.classList.add('found');
 
