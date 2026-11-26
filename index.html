@@ -390,7 +390,7 @@
         async function initApp() {
             try {
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-                session = await ort.InferenceSession.create('https://nowahanga.github.io/ReziCat/best.onnx');
+                session = await ort.InferenceSession.create('https://github.com/NowaHanga/ResiCat/raw/refs/heads/main/best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
                 await startCamera(); 
             } catch (e) {
