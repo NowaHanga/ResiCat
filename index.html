@@ -144,7 +144,6 @@
             margin: 0px auto 5px auto;
         }
 
-        /* Lekkie, całkowicie płynne animacje dla kota (bez obciążania telefonu) */
         @keyframes softTwitchLeft {
             0%, 100% { transform: rotate(0deg); }
             50% { transform: rotate(-7deg) translateY(-1.5px); }
@@ -313,7 +312,7 @@
         </button>
         <div id="status-container">
             <h1 id="status-text">
-                <span id="status-label">SZUKAM</span>
+                <span id="status-label">ŁADOWANIE</span>
             </h1>
             <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
         </div>
@@ -427,6 +426,7 @@
         const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
         async function initApp() {
+            // Na start cały czas jest status ŁADOWANIE...
             await startCamera();
 
             try {
@@ -436,6 +436,8 @@
                 
                 session = await ort.InferenceSession.create('./best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
+                
+                // Dopiero gdy kamera działa i model AI jest załadowany, zmieniamy na SZUKAM...
                 setSearchingUI(); 
             } catch (e) {
                 console.error("Błąd ładowania modelu:", e);
@@ -535,14 +537,12 @@
                     const detections = parseYOLOOutput(output, dims, 0.40); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    // Czułe i pewne wykrywanie: wystarczą minimum 3 paski ułożone w kadrze
                     if (colorDetections.length >= 3) {
                         colorDetections.sort((a, b) => a.x - b.x);
                         const spanX = colorDetections[colorDetections.length - 1].x - colorDetections[0].x;
 
                         if (spanX > 0.02 && spanX < 0.60) {
                             resistorStableCount++;
-                            // Błyskawiczne zamrożenie po 2 klatkach stabilności
                             if (resistorStableCount >= 2) {
                                 handleResistorFound(colorDetections); 
                                 return;
@@ -657,7 +657,7 @@
         async function handleResistorFound(detections) {
             isScanning = false;
 
-            // Automatyczne wyłączenie latarki w trybie sukcesu MAM!!!
+            // Automatyczne wyłączenie latarki po wykryciu rezystora
             await turnOffFlashlight();
 
             frozenCanvas.width = video.videoWidth;
@@ -715,3 +715,25 @@
 
         function setSearchingUI() {
             const statusLabel = document.getElementById('status-label');
+            statusLabel.innerText = 'SZUKAM';
+            document.getElementById('status-text').classList.remove('found');
+
+            document.getElementById('reset-btn').style.display = 'none';
+            document.getElementById('camera-box').classList.remove('found');
+
+            const cat = document.getElementById('cat-wrapper');
+            cat.classList.remove('found');
+            cat.classList.add('searching');
+
+            document.getElementById('eyebrows-searching').style.display = 'block';
+            document.getElementById('eyebrows-found').style.display = 'none';
+            document.getElementById('eyes-searching').style.display = 'block';
+            document.getElementById('eyes-found').style.display = 'none';
+            document.getElementById('mouth-searching').style.display = 'block';
+            document.getElementById('mouth-found').style.display = 'none';
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
