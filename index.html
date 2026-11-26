@@ -163,4 +163,390 @@
             50% { transform: rotate(6deg) translateY(-1px); }
         }
 
-        .searching .ear
+        .searching .ear-left-group {
+            animation: twitchEarLeft 3s ease-in-out infinite;
+            transform-origin: 52px 38px;
+        }
+
+        .searching .ear-right-group {
+            animation: twitchEarRight 3s ease-in-out infinite;
+            transform-origin: 178px 38px;
+        }
+
+        .eyebrow-left, .eyebrow-right {
+            transition: transform 0.3s ease;
+        }
+        .found .eyebrow-left {
+            transform: translateY(-5px) rotate(-8deg);
+        }
+        .found .eyebrow-right {
+            transform: translateY(-5px) rotate(8deg);
+        }
+
+        /* ========================================== */
+        /* / SEKCJA: PODGLĄD Z KAMERY                 */
+        /* ========================================== */
+        .camera-label {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .camera-box {
+            position: relative;
+            width: 100%;
+            max-width: 340px;
+            aspect-ratio: 4 / 3;
+            background: #0d0d14;
+            border-radius: 18px;
+            border: 3px solid #33334d;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .camera-box.found {
+            border-color: var(--accent-mint);
+            box-shadow: 0 0 20px rgba(78, 204, 163, 0.35);
+        }
+
+        video, #frozen-frame {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        #frozen-frame {
+            display: none;
+        }
+
+        /* ========================================== */
+        /* / SEKCJA: KARTA INFORMACYJNA (WYNIKI AI)   */
+        /* ========================================== */
+        #info-card {
+            display: none;
+            width: 100%;
+            max-width: 340px;
+            background: var(--card-bg);
+            border-left: 5px solid var(--accent-mint);
+            border-radius: 14px;
+            padding: 16px 18px;
+            margin-top: 18px;
+            box-sizing: border-box;
+            text-align: left;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .info-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--accent-mint);
+            letter-spacing: 1.5px;
+            margin: 0 0 10px 0;
+        }
+
+        .info-row {
+            font-size: 15px;
+            margin: 6px 0;
+            color: var(--text-main);
+        }
+
+        .info-row span {
+            color: var(--accent-yellow);
+            font-weight: 700;
+        }
+
+        #model-status {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ========================================== -->
+    <!-- / SEKCJA HTML: NAGŁÓWEK                    -->
+    <!-- ========================================== -->
+    <header class="app-header">
+        <h1 class="app-title">
+            RES<span class="letter-i-container">
+                <svg class="cat-paw-dot" viewBox="0 0 32 30" width="100%" height="100%">
+                    <path d="M 16 14 C 11 9, 6 12, 6 17 C 6 21, 11 25, 16 28 C 21 25, 26 21, 26 17 C 26 12, 21 9, 16 14 Z" fill="var(--accent-blue)"/>
+                    <circle cx="8" cy="8" r="3.5" fill="var(--accent-blue)"/>
+                    <circle cx="13" cy="5" r="3.5" fill="var(--accent-blue)"/>
+                    <circle cx="19" cy="5" r="3.5" fill="var(--accent-blue)"/>
+                    <circle cx="24" cy="8" r="3.5" fill="var(--accent-blue)"/>
+                </svg>
+                I
+            </span>CAT
+        </h1>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- / SEKCJA HTML: GÓRNY PASEK STATUSU         -->
+    <!-- ========================================== -->
+    <div class="top-bar">
+        <h1 id="status-text">ŁADOWANIE...</h1>
+        <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- / SEKCJA HTML: GRAFIKA POMOCNICZA          -->
+    <!-- ========================================== -->
+    <div id="cat-wrapper" class="cat-container searching">
+        <svg viewBox="0 0 230 160" width="100%" height="100%">
+            
+            <g class="ear-left-group">
+                <path d="M 40 45 L 52 8 L 80 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            <g class="ear-right-group">
+                <path d="M 190 45 L 178 8 L 150 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            
+            <ellipse class="eyebrow-left" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+            <ellipse class="eyebrow-right" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+
+            <circle cx="70" cy="82" r="25" fill="var(--accent-blue)"/>
+            <circle cx="160" cy="82" r="25" fill="var(--accent-blue)"/>
+
+            <g class="pupils-moving">
+                <circle cx="70" cy="82" r="21" fill="var(--bg-color)"/>
+                <circle cx="62" cy="73" r="7" fill="#ffffff"/>
+                <circle cx="79" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
+            </g>
+
+            <g class="pupils-moving">
+                <circle cx="160" cy="82" r="21" fill="var(--bg-color)"/>
+                <circle cx="152" cy="73" r="7" fill="#ffffff"/>
+                <circle cx="169" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
+            </g>
+
+            <line x1="18" y1="92" x2="36" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="16" y1="103" x2="34" y2="102" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="20" y1="114" x2="36" y2="111" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+
+            <line x1="212" y1="92" x2="194" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="214" y1="103" x2="196" y2="102" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="210" y1="114" x2="194" y2="111" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+
+            <polygon points="112,102 122,102 117,110" fill="var(--accent-blue)"/>
+
+            <g id="mouth-searching">
+                <path d="M 108 116 Q 113 121 117 116 Q 121 121 126 116" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+            </g>
+
+            <g id="mouth-found" style="display: none;">
+                <path d="M 102 114 Q 117 134 132 114 Z" fill="var(--accent-blue)" stroke="var(--bg-color)" stroke-width="2" stroke-linejoin="round"/>
+                <polygon points="107,115 111,123 115,115" fill="#ffffff"/>
+            </g>
+        </svg>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- / SEKCJA HTML: KAMERA I WYNIKI             -->
+    <!-- ========================================== -->
+    <div class="camera-label">KAMERA</div>
+    <div id="camera-box" class="camera-box">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="frozen-frame"></canvas>
+    </div>
+
+    <div id="info-card">
+        <div class="info-title">INFO:</div>
+        <div id="info-content"></div>
+    </div>
+
+    <div id="model-status">Inicjalizacja modelu AI...</div>
+    <canvas id="ai-canvas" width="320" height="320" style="display:none;"></canvas>
+
+    <!-- ========================================== -->
+    <!-- / SEKCJA JAVASCRIPT: LOGIKA I SKANER AI    -->
+    <!-- ========================================== -->
+    <script>
+        const CLASS_NAMES = [
+            "Czarny", "Brązowy", "Czerwony", "Pomarańczowy", 
+            "Żółty", "Zielony", "Niebieski", "Fioletowy", 
+            "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
+        ];
+
+        let session = null;     
+        let isScanning = false; 
+        const video = document.getElementById('webcam');
+        const frozenCanvas = document.getElementById('frozen-frame');
+        const aiCanvas = document.getElementById('ai-canvas');
+        const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
+
+        async function initApp() {
+            try {
+                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+                session = await ort.InferenceSession.create('./best.onnx');
+                document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
+                await startCamera(); 
+            } catch (e) {
+                console.error("Błąd modelu:", e);
+                document.getElementById('model-status').innerText = 'Błąd ładowania best.onnx';
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' } 
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    isScanning = true;
+                    setSearchingUI();
+                    scanLoop(); 
+                };
+            } catch (err) {
+                document.getElementById('status-text').innerText = 'BRAK KAMERY';
+                document.getElementById('model-status').innerText = 'Zezwól na dostęp do aparatu.';
+            }
+        }
+
+        async function scanLoop() {
+            if (!isScanning || !session) return;
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                aiCtx.drawImage(video, 0, 0, 320, 320); 
+                const imgData = aiCtx.getImageData(0, 0, 320, 320).data;
+
+                const float32Data = new Float32Array(3 * 320 * 320);
+                for (let i = 0; i < 320 * 320; i++) {
+                    float32Data[i] = imgData[i * 4] / 255.0;                  
+                    float32Data[i + 320 * 320] = imgData[i * 4 + 1] / 255.0;  
+                    float32Data[i + 2 * 320 * 320] = imgData[i * 4 + 2] / 255.0;
+                }
+
+                const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, 320, 320]);
+                
+                try {
+                    const feeds = {};
+                    feeds[session.inputNames[0]] = inputTensor;
+                    const results = await session.run(feeds); 
+                    const output = results[session.outputNames[0]].data;
+                    const dims = results[session.outputNames[0]].dims;
+
+                    const detections = parseYOLOOutput(output, dims, 0.50); 
+
+                    if (detections.length > 0) {
+                        handleResistorFound(detections); 
+                        return;
+                    }
+                } catch (err) {
+                    console.error("Błąd detekcji:", err);
+                }
+            }
+
+            setTimeout(() => requestAnimationFrame(scanLoop), 150); 
+        }
+
+        function parseYOLOOutput(data, dims, confThreshold) {
+            const numFeatures = dims[1];
+            const numAnchors = dims[2];
+            const numClasses = numFeatures - 4;
+            let found = [];
+
+            for (let i = 0; i < numAnchors; i++) {
+                let maxScore = 0;
+                let classId = -1;
+
+                for (let c = 0; c < numClasses; c++) {
+                    const score = data[(4 + c) * numAnchors + i];
+                    if (score > maxScore) {
+                        maxScore = score;
+                        classId = c;
+                    }
+                }
+
+                if (maxScore > confThreshold) {
+                    const label = CLASS_NAMES[classId] || `Klasa #${classId}`;
+                    if (!found.some(item => item.label === label)) {
+                        found.push({
+                            label: label,
+                            confidence: Math.round(maxScore * 100)
+                        });
+                    }
+                }
+            }
+            return found;
+        }
+
+        function handleResistorFound(detections) {
+            isScanning = false;
+
+            frozenCanvas.width = video.videoWidth;
+            frozenCanvas.height = video.videoHeight;
+            const fCtx = frozenCanvas.getContext('2d');
+            fCtx.drawImage(video, 0, 0, frozenCanvas.width, frozenCanvas.height);
+
+            video.style.display = 'none';
+            frozenCanvas.style.display = 'block';
+
+            const statusText = document.getElementById('status-text');
+            statusText.innerText = 'MAM!!!';
+            statusText.classList.add('found');
+
+            document.getElementById('reset-btn').style.display = 'block';
+            document.getElementById('camera-box').classList.add('found');
+
+            const cat = document.getElementById('cat-wrapper');
+            cat.classList.remove('searching');
+            cat.classList.add('found');
+
+            document.getElementById('mouth-searching').style.display = 'none';
+            document.getElementById('mouth-found').style.display = 'block';
+
+            const infoCard = document.getElementById('info-card');
+            const infoContent = document.getElementById('info-content');
+            
+            let html = `<div class="info-row">Status: <span>Wykryto obiekt!</span></div>`;
+            detections.forEach(det => {
+                html += `<div class="info-row">• Obiekt / klasa: <span>${det.label}</span> / pewność: <span>${det.confidence}%</span></div>`;
+            });
+            
+            infoContent.innerHTML = html;
+            infoCard.style.display = 'block';
+        }
+
+        function resetScanner() {
+            frozenCanvas.style.display = 'none';
+            video.style.display = 'block';
+            document.getElementById('info-card').style.display = 'none';
+            setSearchingUI();
+            isScanning = true;
+            scanLoop();
+        }
+
+        function setSearchingUI() {
+            const statusText = document.getElementById('status-text');
+            statusText.innerText = 'SZUKAM...';
+            statusText.classList.remove('found');
+
+            document.getElementById('reset-btn').style.display = 'none';
+            document.getElementById('camera-box').classList.remove('found');
+
+            const cat = document.getElementById('cat-wrapper');
+            cat.classList.remove('found');
+            cat.classList.add('searching');
+
+            document.getElementById('mouth-searching').style.display = 'block';
+            document.getElementById('mouth-found').style.display = 'none';
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
