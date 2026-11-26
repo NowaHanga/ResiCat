@@ -64,7 +64,6 @@
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         }
 
-        /* Górny panel narzędziowy (latarka + status) */
         .controls-bar {
             display: flex;
             align-items: center;
@@ -120,7 +119,6 @@
             text-shadow: 0 0 12px rgba(78, 204, 163, 0.4);
         }
 
-        /* Spowolnione, płynne 3 kropki ładowania */
         .messenger-dots {
             display: inline-flex;
             align-items: center;
@@ -171,43 +169,52 @@
             margin: 0px auto 5px auto;
         }
 
-        /* Absolutnie płynne animacje uszu i oczu bez klatkowania */
+        /* W pełni płynne animacje uszu i oczu oparte o funkcje przejścia */
         @keyframes smoothTwitchLeft {
             0%, 100% { transform: rotate(0deg) translateY(0); }
-            50% { transform: rotate(-8deg) translateY(-2px); }
+            50% { transform: rotate(-10deg) translateY(-2.5px); }
         }
 
         @keyframes smoothTwitchRight {
             0%, 100% { transform: rotate(0deg) translateY(0); }
-            50% { transform: rotate(8deg) translateY(-2px); }
+            50% { transform: rotate(10deg) translateY(-2.5px); }
         }
 
         @keyframes lookAroundSmooth {
             0%, 100% { transform: translate(0px, 0px); }
-            50% { transform: translate(-2.5px, 0.8px); }
+            50% { transform: translate(-3px, 1px); }
         }
 
         @keyframes glowEyes {
             0%, 100% { filter: drop-shadow(0 0 2px var(--accent-mint)); transform: scale(1); }
-            50% { filter: drop-shadow(0 0 10px var(--accent-mint)); transform: scale(1.04); }
+            50% { filter: drop-shadow(0 0 10px var(--accent-mint)); transform: scale(1.05); }
         }
 
         .searching .pupils-moving {
-            animation: lookAroundSmooth 4s ease-in-out infinite;
+            animation: lookAroundSmooth 4.5s ease-in-out infinite;
         }
 
         .ear-left-group {
-            animation: smoothTwitchLeft 3s ease-in-out infinite;
+            animation: smoothTwitchLeft 2.8s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
         .ear-right-group {
-            animation: smoothTwitchRight 3s ease-in-out infinite;
+            animation: smoothTwitchRight 2.8s ease-in-out infinite;
             transform-origin: 178px 38px;
         }
 
         .found .happy-eyes-anim {
             animation: glowEyes 2s ease-in-out infinite;
             transform-origin: center;
+        }
+
+        .found .ear-left-group {
+            animation: smoothTwitchLeft 1.2s ease-in-out infinite;
+            transform-origin: 52px 38px;
+        }
+        .found .ear-right-group {
+            animation: smoothTwitchRight 1.2s ease-in-out infinite;
+            transform-origin: 178px 38px;
         }
 
         .found .eyebrow-left-found {
@@ -322,7 +329,6 @@
         </h1>
     </header>
 
-    <!-- Pasek sterowania z latarką i statusem -->
     <div class="controls-bar">
         <button id="flashlight-btn" onclick="toggleFlashlight()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -440,7 +446,7 @@
         let session = null;     
         let isScanning = false; 
         let resistorStableCount = 0; 
-        let lastBandsSignature = ""; 
+        let lastBandsCount = 0;
         let mediaStream = null;
         let torchOn = false;
 
@@ -484,7 +490,6 @@
             }
         }
 
-        // Obsługa latarki (flesza w telefonie)
         async function toggleFlashlight() {
             if (!mediaStream) return;
             const track = mediaStream.getVideoTracks()[0];
@@ -539,29 +544,24 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.55); 
+                    const detections = parseYOLOOutput(output, dims, 0.45); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    // Rygorystyczny filtr geometryczny odrzucający klawiaturę i tło:
-                    // Paski muszą układać się w logiczny ciąg o odpowiedniej szerokości w kadrze
+                    // Elastyczna stabilizacja: akceptujemy wykrycie, jeśli widzimy min. 3 paski ułożone w logicznej odległości
                     if (colorDetections.length >= 3) {
                         colorDetections.sort((a, b) => a.x - b.x);
-                        
                         const spanX = colorDetections[colorDetections.length - 1].x - colorDetections[0].x;
-                        
-                        // Paski rezystora muszą zajmować spójny fragment kadru (unikamy wykrywania losowych przedmiotów na skrajach)
-                        if (spanX > 0.04 && spanX < 0.40) {
-                            const currentSignature = colorDetections.map(d => d.label).join(',');
 
-                            if (currentSignature === lastBandsSignature) {
+                        if (spanX > 0.03 && spanX < 0.50) {
+                            if (colorDetections.length === lastBandsCount) {
                                 resistorStableCount++;
                             } else {
-                                lastBandsSignature = currentSignature;
+                                lastBandsCount = colorDetections.length;
                                 resistorStableCount = 1;
                             }
 
-                            // Wymóg stabilnego przytrzymania w miejscu przez ok. 4 klatki
-                            if (resistorStableCount >= 4) {
+                            // Wystarczą 3 stabilne klatki w miejscu, aby błyskawicznie złapać i zamrozić odczyt
+                            if (resistorStableCount >= 3) {
                                 handleResistorFound(colorDetections); 
                                 return;
                             }
@@ -574,7 +574,7 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 120); 
+            setTimeout(() => requestAnimationFrame(scanLoop), 100); 
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
@@ -692,7 +692,6 @@
             document.getElementById('camera-box').classList.add('found');
 
             const cat = document.getElementById('cat-wrapper');
-            // Kot zostaje w klasie searching/found, ale zachowujemy płynny ruch uszu
             cat.classList.remove('searching');
             cat.classList.add('found');
 
@@ -725,7 +724,7 @@
             video.style.display = 'block';
             document.getElementById('info-card').style.display = 'none';
             resistorStableCount = 0;
-            lastBandsSignature = "";
+            lastBandsCount = 0;
             setSearchingUI();
             isScanning = true;
             scanLoop();
