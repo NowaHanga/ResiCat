@@ -1,32 +1,22 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <!-- ========================================== -->
-    <!-- / SEKCJA: USTAWIENIA DOKUMENTU             -->
-    <!-- ========================================== -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ResiCat - Skaner Rezystorów</title>
-    <!-- Załadowanie biblioteki ONNX Runtime Web do obsługi AI -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
-        /* ========================================== */
-        /* / SEKCJA: ZMIENNE KOLORYSTYKI              -->
-        /* ========================================== */
         :root {
-            --bg-color: #161622;         /* Główny kolor tła strony */
-            --card-bg: #222234;         /* Kolor karty informacyjnej */
-            --accent-blue: #40c4ff;      /* Turkusowy kolor elementów graficznych */
-            --accent-pink: #ff7eb3;      /* Różowy kolor akcentów i przycisku */
-            --accent-mint: #4ecca3;      /* Miętowy kolor sukcesu (znaleziono) */
-            --accent-yellow: #ffd369;    /* Żółty kolor statusu szukania */
-            --text-main: #ffffff;        /* Główny kolor białego tekstu */
-            --text-muted: #a0a0b8;       /* Wyblakły kolor pomocniczy */
+            --bg-color: #161622;
+            --card-bg: #222234;
+            --accent-blue: #40c4ff;
+            --accent-pink: #ff7eb3;
+            --accent-mint: #4ecca3;
+            --accent-yellow: #ffd369;
+            --text-main: #ffffff;
+            --text-muted: #a0a0b8;
         }
 
-        /* ========================================== */
-        /* / SEKCJA: OGÓLNY WYGLĄD STRONY (BODY)      */
-        /* ========================================== */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg-color);
@@ -39,9 +29,6 @@
             min-height: 100vh;
         }
 
-        /* ========================================== */
-        /* / SEKCJA: DUŻY NAGŁÓWEK RESICAT Z IKONĄ   */
-        /* ========================================== */
         .app-header {
             display: flex;
             flex-direction: column;
@@ -50,9 +37,9 @@
         }
 
         .app-title {
-            font-size: 44px;              /* Bardzo duży, wyrazisty napis RESICAT */
+            font-size: 44px;
             font-weight: 900;
-            letter-spacing: 6px;          /* Szerokie odstępy między literami */
+            letter-spacing: 6px;
             color: var(--text-main);
             margin: 0;
             text-transform: uppercase;
@@ -61,16 +48,14 @@
             text-shadow: 0 2px 20px rgba(64, 196, 255, 0.4);
         }
 
-        /* Kontener litery "I" z dopasowanymi, wąskimi odstępami */
         .letter-i-container {
             display: inline-flex;
             flex-direction: column;
             align-items: center;
             position: relative;
-            margin: 0 -2px;               /* Zmniejszone marginesy, żeby "I" było bliżej E i C */
+            margin: 0 -2px;
         }
 
-        /* Ikona łapki tuż nad literą "i" */
         .cat-paw-dot {
             width: 24px;                  
             height: 22px;                 
@@ -79,9 +64,6 @@
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         }
 
-        /* ========================================== */
-        /* / SEKCJA: GÓRNY PASEK STATUSU I PRZYCISK   */
-        /* ========================================== */
         .top-bar {
             display: flex;
             align-items: center;
@@ -126,66 +108,51 @@
             transform: scale(0.95);
         }
 
-        /* ========================================== */
-        /* / SEKCJA: WYGLĄD I PROPORCJE IKONY         */
-        /* ========================================== */
         .cat-container {
             width: 240px;
             height: 160px;
             margin: 5px auto 10px auto;
         }
 
-        /* ========================================== */
-        /* / SEKCJA: ANIMACJE ELEMENTÓW GRAFICZNYCH   */
-        /* ========================================== */
+        /* Animacje uszu i oczu */
         @keyframes lookAroundSafe {
             0%, 100% { transform: translate(0px, 0px); }
             25% { transform: translate(-2px, 1px); }
             75% { transform: translate(2px, 1px); }
         }
 
+        @keyframes happyEarLeft {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-10deg) translateY(-2px); }
+        }
+
+        @keyframes happyEarRight {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(10deg) translateY(-2px); }
+        }
+
         .searching .pupils-moving {
             animation: lookAroundSafe 2.4s ease-in-out infinite;
-        }
-
-        .found .pupils-moving {
-            transform: translate(0px, 0px);
-            transition: transform 0.2s ease-out;
-        }
-
-        @keyframes twitchEarLeft {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(-6deg) translateY(-1px); }
-        }
-
-        @keyframes twitchEarRight {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(6deg) translateY(-1px); }
         }
 
         .searching .ear-left-group {
             animation: twitchEarLeft 3s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
-
         .searching .ear-right-group {
             animation: twitchEarRight 3s ease-in-out infinite;
             transform-origin: 178px 38px;
         }
 
-        .eyebrow-left, .eyebrow-right {
-            transition: transform 0.3s ease;
+        .found .ear-left-group {
+            animation: happyEarLeft 0.8s ease-in-out infinite;
+            transform-origin: 52px 38px;
         }
-        .found .eyebrow-left {
-            transform: translateY(-5px) rotate(-8deg);
-        }
-        .found .eyebrow-right {
-            transform: translateY(-5px) rotate(8deg);
+        .found .ear-right-group {
+            animation: happyEarRight 0.8s ease-in-out infinite;
+            transform-origin: 178px 38px;
         }
 
-        /* ========================================== */
-        /* / SEKCJA: PODGLĄD Z KAMERY                 */
-        /* ========================================== */
         .camera-label {
             font-size: 13px;
             font-weight: 700;
@@ -223,9 +190,6 @@
             display: none;
         }
 
-        /* ========================================== */
-        /* / SEKCJA: KARTA INFORMACYJNA (WYNIKI AI)   */
-        /* ========================================== */
         #info-card {
             display: none;
             width: 100%;
@@ -275,9 +239,6 @@
 </head>
 <body>
 
-    <!-- ========================================== -->
-    <!-- / SEKCJA HTML: NAGŁÓWEK                    -->
-    <!-- ========================================== -->
     <header class="app-header">
         <h1 class="app-title">
             RES<span class="letter-i-container">
@@ -293,20 +254,14 @@
         </h1>
     </header>
 
-    <!-- ========================================== -->
-    <!-- / SEKCJA HTML: GÓRNY PASEK STATUSU         -->
-    <!-- ========================================== -->
     <div class="top-bar">
         <h1 id="status-text">ŁADOWANIE...</h1>
         <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
     </div>
 
-    <!-- ========================================== -->
-    <!-- / SEKCJA HTML: GRAFIKA POMOCNICZA          -->
-    <!-- ========================================== -->
+    <!-- Kot z obsługą stanu szukania i znalezienia (szczęśliwe oczy i uśmiech) -->
     <div id="cat-wrapper" class="cat-container searching">
         <svg viewBox="0 0 230 160" width="100%" height="100%">
-            
             <g class="ear-left-group">
                 <path d="M 40 45 L 52 8 L 80 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
             </g>
@@ -314,22 +269,28 @@
                 <path d="M 190 45 L 178 8 L 150 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
             </g>
             
-            <ellipse class="eyebrow-left" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <ellipse class="eyebrow-right" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-
-            <circle cx="70" cy="82" r="25" fill="var(--accent-blue)"/>
-            <circle cx="160" cy="82" r="25" fill="var(--accent-blue)"/>
-
-            <g class="pupils-moving">
-                <circle cx="70" cy="82" r="21" fill="var(--bg-color)"/>
-                <circle cx="62" cy="73" r="7" fill="#ffffff"/>
-                <circle cx="79" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
+            <!-- Oczy szukające -->
+            <g id="eyes-searching">
+                <ellipse cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+                <ellipse cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+                <circle cx="70" cy="82" r="25" fill="var(--accent-blue)"/>
+                <circle cx="160" cy="82" r="25" fill="var(--accent-blue)"/>
+                <g class="pupils-moving">
+                    <circle cx="70" cy="82" r="21" fill="var(--bg-color)"/>
+                    <circle cx="62" cy="73" r="7" fill="#ffffff"/>
+                    <circle cx="79" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
+                </g>
+                <g class="pupils-moving">
+                    <circle cx="160" cy="82" r="21" fill="var(--bg-color)"/>
+                    <circle cx="152" cy="73" r="7" fill="#ffffff"/>
+                    <circle cx="169" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
+                </g>
             </g>
 
-            <g class="pupils-moving">
-                <circle cx="160" cy="82" r="21" fill="var(--bg-color)"/>
-                <circle cx="152" cy="73" r="7" fill="#ffffff"/>
-                <circle cx="169" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
+            <!-- Oczy szczęśliwe (przymrużone łuki) -->
+            <g id="eyes-found" style="display: none;">
+                <path d="M 48 82 Q 70 60 92 82" fill="none" stroke="var(--accent-blue)" stroke-width="6" stroke-linecap="round"/>
+                <path d="M 138 82 Q 160 60 182 82" fill="none" stroke="var(--accent-blue)" stroke-width="6" stroke-linecap="round"/>
             </g>
 
             <line x1="18" y1="92" x2="36" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
@@ -347,15 +308,12 @@
             </g>
 
             <g id="mouth-found" style="display: none;">
-                <path d="M 102 114 Q 117 134 132 114 Z" fill="var(--accent-blue)" stroke="var(--bg-color)" stroke-width="2" stroke-linejoin="round"/>
-                <polygon points="107,115 111,123 115,115" fill="#ffffff"/>
+                <path d="M 100 114 Q 117 138 134 114 Z" fill="var(--accent-blue)" stroke="var(--bg-color)" stroke-width="2" stroke-linejoin="round"/>
+                <polygon points="108,116 113,126 118,116" fill="#ffffff"/>
             </g>
         </svg>
     </div>
 
-    <!-- ========================================== -->
-    <!-- / SEKCJA HTML: KAMERA I WYNIKI             -->
-    <!-- ========================================== -->
     <div class="camera-label">KAMERA</div>
     <div id="camera-box" class="camera-box">
         <video id="webcam" autoplay playsinline muted></video>
@@ -370,9 +328,6 @@
     <div id="model-status">Inicjalizacja modelu AI...</div>
     <canvas id="ai-canvas" width="320" height="320" style="display:none;"></canvas>
 
-    <!-- ========================================== -->
-    <!-- / SEKCJA JAVASCRIPT: LOGIKA I SKANER AI    -->
-    <!-- ========================================== -->
     <script>
         const CLASS_NAMES = [
             "Czarny", "Brązowy", "Czerwony", "Pomarańczowy", 
@@ -390,7 +345,7 @@
         async function initApp() {
             try {
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
-                ort.env.wasm.numThreads = 1; // Wyłączenie wielowątkowości blokowanej przez przeglądarkę
+                ort.env.wasm.numThreads = 1;
                 
                 session = await ort.InferenceSession.create('./best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
@@ -443,8 +398,12 @@
 
                     const detections = parseYOLOOutput(output, dims, 0.50); 
 
-                    if (detections.length > 0) {
-                        handleResistorFound(detections); 
+                    // Sprawdzamy czy wykryto główny obiekt "Rezystor" ORAZ przynajmniej jeden pasek kolorowy
+                    const hasResistor = detections.some(d => d.label === "Rezystor");
+                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
+
+                    if (hasResistor && colorDetections.length > 0) {
+                        handleResistorFound(colorDetections); 
                         return;
                     }
                 } catch (err) {
@@ -508,15 +467,18 @@
             cat.classList.remove('searching');
             cat.classList.add('found');
 
+            // Przełączamy oczy na szczęśliwe (przymrużone) i uśmiech
+            document.getElementById('eyes-searching').style.display = 'none';
+            document.getElementById('eyes-found').style.display = 'block';
             document.getElementById('mouth-searching').style.display = 'none';
             document.getElementById('mouth-found').style.display = 'block';
 
             const infoCard = document.getElementById('info-card');
             const infoContent = document.getElementById('info-content');
             
-            let html = `<div class="info-row">Status: <span>Wykryto obiekt!</span></div>`;
+            let html = `<div class="info-row">Status: <span>Wykryto rezystor i paski!</span></div>`;
             detections.forEach(det => {
-                html += `<div class="info-row">• Obiekt / klasa: <span>${det.label}</span> / pewność: <span>${det.confidence}%</span></div>`;
+                html += `<div class="info-row">• Kolor paska: <span>${det.label}</span> (pewność: <span>${det.confidence}%</span>)</div>`;
             });
             
             infoContent.innerHTML = html;
@@ -544,6 +506,8 @@
             cat.classList.remove('found');
             cat.classList.add('searching');
 
+            document.getElementById('eyes-searching').style.display = 'block';
+            document.getElementById('eyes-found').style.display = 'none';
             document.getElementById('mouth-searching').style.display = 'block';
             document.getElementById('mouth-found').style.display = 'none';
         }
