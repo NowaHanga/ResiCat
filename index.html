@@ -381,7 +381,7 @@
         const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
         async function initApp() {
-            // Najpierw uruchamiamy kamerę, żeby użytkownik od razu widział podgląd
+            // Natychmiastowe uruchomienie kamery, aby interfejs od razu żył
             await startCamera();
 
             try {
@@ -418,7 +418,6 @@
         async function scanLoop() {
             if (!isScanning) return;
 
-            // Jeśli model jeszcze się nie załadował, czekamy i próbujemy dalej
             if (!session) {
                 setTimeout(() => requestAnimationFrame(scanLoop), 200);
                 return;
@@ -444,7 +443,7 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.75); 
+                    const detections = parseYOLOOutput(output, dims, 0.70); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
                     if (colorDetections.length >= 3) {
@@ -458,7 +457,7 @@
                             resistorStableCount = 1;
                         }
 
-                        if (resistorStableCount >= 5) {
+                        if (resistorStableCount >= 4) {
                             handleResistorFound(colorDetections); 
                             return;
                         }
@@ -645,7 +644,6 @@
             document.getElementById('mouth-found').style.display = 'none';
         }
 
-        // Start aplikacji po załadowaniu strony
         initApp();
     </script>
 </body>
