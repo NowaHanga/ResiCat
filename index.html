@@ -158,9 +158,15 @@
             transform-origin: center;
         }
 
-        /* Symetryczne, idealnie równe uniesione brwi w trybie sukcesu */
-        .found .eyebrow-found-sym {
-            transform: translateY(-8px);
+        /* Lekko pochylone, symetryczne brwi w trybie sukcesu */
+        .found .eyebrow-left-found {
+            transform: translateY(-7px) rotate(-15deg);
+            transform-origin: 70px 45px;
+            transition: transform 0.3s ease;
+        }
+        .found .eyebrow-right-found {
+            transform: translateY(-7px) rotate(15deg);
+            transform-origin: 160px 45px;
             transition: transform 0.3s ease;
         }
 
@@ -279,16 +285,16 @@
                 <path d="M 190 45 L 178 8 L 150 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
             </g>
             
-            <!-- Standardowe brwi do szukania -->
+            <!-- Standardowe brwi -->
             <g id="eyebrows-searching">
                 <ellipse class="eyebrow-left" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
                 <ellipse class="eyebrow-right" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
             </g>
 
-            <!-- Idealnie symetryczne, uniesione brwi w trybie MAM!!! -->
-            <g id="eyebrows-found" class="eyebrow-found-sym" style="display: none;">
-                <ellipse cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
-                <ellipse cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
+            <!-- Lekko pochylone, symetryczne brwi w trybie MAM!!! -->
+            <g id="eyebrows-found" style="display: none;">
+                <ellipse class="eyebrow-left-found" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
+                <ellipse class="eyebrow-right-found" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
             </g>
 
             <g id="eyes-searching">
@@ -430,13 +436,15 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.40); 
+                    // Podniesiono próg pewności do 0.75 (75%), aby odrzucić losowe fałszywe wykrycia
+                    const detections = parseYOLOOutput(output, dims, 0.75); 
 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    if (colorDetections.length >= 2) {
+                    // Wymagamy minimum 3 pewnych pasków ułożonych w linii, aby odrzucić przypadkowe obiekty
+                    if (colorDetections.length >= 3) {
                         resistorStableCount++;
-                        if (resistorStableCount >= 2) {
+                        if (resistorStableCount >= 4) {
                             handleResistorFound(colorDetections); 
                             return;
                         }
@@ -485,11 +493,8 @@
         }
 
         function calculateResistor(bands) {
-            // Sortowanie od lewej do prawej na osi X
             bands.sort((a, b) => a.x - b.x);
 
-            // Poprawiona logika odczytu: jeśli na końcu znajduje się złoty/srebrny (tolerancja), zostawiamy bez zmian.
-            // Jeśli złoty/srebrny omyłkowo wylądował na samym początku, odwracamy kierunek.
             const firstLabel = bands[0].label;
             if (bands.length > 2 && (firstLabel === "Złoty" || firstLabel === "Srebrny")) {
                 bands.reverse();
@@ -578,54 +583,4 @@
             document.getElementById('mouth-searching').style.display = 'none';
             document.getElementById('mouth-found').style.display = 'block';
 
-            const result = calculateResistor(detections);
-
-            const infoCard = document.getElementById('info-card');
-            const infoContent = document.getElementById('info-content');
-            
-            let html = `<div class="info-row">Wartość: <span>${result.resistance}</span></div>`;
-            html += `<div class="info-row">Tolerancja: <span>${result.tolerance}</span></div>`;
-            if (result.tempCoeff) {
-                html += `<div class="info-row">Współczynnik TK: <span>${result.tempCoeff}</span></div>`;
-            }
-            html += `<hr style="border: 0; border-top: 1px solid #33334d; margin: 8px 0;">`;
-            html += `<div class="info-row" style="font-size: 13px; color: var(--text-muted);">Paski: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
-            
-            infoContent.innerHTML = html;
-            infoCard.style.display = 'block';
-        }
-
-        function resetScanner() {
-            frozenCanvas.style.display = 'none';
-            video.style.display = 'block';
-            document.getElementById('info-card').style.display = 'none';
-            resistorStableCount = 0;
-            setSearchingUI();
-            isScanning = true;
-            scanLoop();
-        }
-
-        function setSearchingUI() {
-            const statusText = document.getElementById('status-text');
-            statusText.innerText = 'SZUKAM...';
-            statusText.classList.remove('found');
-
-            document.getElementById('reset-btn').style.display = 'none';
-            document.getElementById('camera-box').classList.remove('found');
-
-            const cat = document.getElementById('cat-wrapper');
-            cat.classList.remove('found');
-            cat.classList.add('searching');
-
-            document.getElementById('eyebrows-searching').style.display = 'block';
-            document.getElementById('eyebrows-found').style.display = 'none';
-            document.getElementById('eyes-searching').style.display = 'block';
-            document.getElementById('eyes-found').style.display = 'none';
-            document.getElementById('mouth-searching').style.display = 'block';
-            document.getElementById('mouth-found').style.display = 'none';
-        }
-
-        initApp();
-    </script>
-</body>
-</html>
+            const result = calculateResistor(detections
