@@ -131,6 +131,16 @@
             50% { transform: rotate(10deg) translateY(-2px); }
         }
 
+        @keyframes glowEyes {
+            0%, 100% { filter: drop-shadow(0 0 2px var(--accent-mint)); transform: scale(1); }
+            50% { filter: drop-shadow(0 0 10px var(--accent-mint)); transform: scale(1.05); }
+        }
+
+        @keyframes happyBlink {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
         .searching .pupils-moving {
             animation: lookAroundSafe 2.4s ease-in-out infinite;
         }
@@ -151,6 +161,21 @@
         .found .ear-right-group {
             animation: happyEarRight 0.8s ease-in-out infinite;
             transform-origin: 178px 38px;
+        }
+
+        .found .happy-eyes-anim {
+            animation: glowEyes 1.5s ease-in-out infinite, happyBlink 1s ease-in-out infinite;
+            transform-origin: center;
+        }
+
+        /* Unniesione brwi w trybie sukcesu */
+        .found .eyebrow-left-found {
+            transform: translateY(-8px) rotate(-12deg);
+            transition: transform 0.3s ease;
+        }
+        .found .eyebrow-right-found {
+            transform: translateY(-8px) rotate(12deg);
+            transition: transform 0.3s ease;
         }
 
         .camera-label {
@@ -259,7 +284,7 @@
         <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
     </div>
 
-    <!-- Kot z obsługą stanu szukania i znalezienia (szczęśliwe oczy i uśmiech) -->
+    <!-- Kot z obsługą stanu szukania i znalezienia (uniesione brwi, świecące i mrugające oczy) -->
     <div id="cat-wrapper" class="cat-container searching">
         <svg viewBox="0 0 230 160" width="100%" height="100%">
             <g class="ear-left-group">
@@ -269,10 +294,20 @@
                 <path d="M 190 45 L 178 8 L 150 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
             </g>
             
+            <!-- Brwi w trybie szukania -->
+            <g id="eyebrows-searching">
+                <ellipse class="eyebrow-left" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+                <ellipse class="eyebrow-right" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
+            </g>
+
+            <!-- Brwi w trybie sukcesu (uniesione) -->
+            <g id="eyebrows-found" style="display: none;">
+                <ellipse class="eyebrow-left-found" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
+                <ellipse class="eyebrow-right-found" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
+            </g>
+
             <!-- Oczy szukające -->
             <g id="eyes-searching">
-                <ellipse cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-                <ellipse cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
                 <circle cx="70" cy="82" r="25" fill="var(--accent-blue)"/>
                 <circle cx="160" cy="82" r="25" fill="var(--accent-blue)"/>
                 <g class="pupils-moving">
@@ -287,10 +322,10 @@
                 </g>
             </g>
 
-            <!-- Oczy szczęśliwe (przymrużone łuki) -->
-            <g id="eyes-found" style="display: none;">
-                <path d="M 48 82 Q 70 60 92 82" fill="none" stroke="var(--accent-blue)" stroke-width="6" stroke-linecap="round"/>
-                <path d="M 138 82 Q 160 60 182 82" fill="none" stroke="var(--accent-blue)" stroke-width="6" stroke-linecap="round"/>
+            <!-- Oczy szczęśliwe, świecące i mrugające (MAM!!!) -->
+            <g id="eyes-found" class="happy-eyes-anim" style="display: none;">
+                <path d="M 48 82 Q 70 58 92 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
+                <path d="M 138 82 Q 160 58 182 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
             </g>
 
             <line x1="18" y1="92" x2="36" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
@@ -308,7 +343,7 @@
             </g>
 
             <g id="mouth-found" style="display: none;">
-                <path d="M 100 114 Q 117 138 134 114 Z" fill="var(--accent-blue)" stroke="var(--bg-color)" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M 100 114 Q 117 138 134 114 Z" fill="var(--accent-mint)" stroke="var(--bg-color)" stroke-width="2" stroke-linejoin="round"/>
                 <polygon points="108,116 113,126 118,116" fill="#ffffff"/>
             </g>
         </svg>
@@ -337,6 +372,7 @@
 
         let session = null;     
         let isScanning = false; 
+        let resistorStableCount = 0; // Licznik stabilizacji wykrywania rezystora
         const video = document.getElementById('webcam');
         const frozenCanvas = document.getElementById('frozen-frame');
         const aiCanvas = document.getElementById('ai-canvas');
@@ -396,15 +432,22 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.50); 
+                    const detections = parseYOLOOutput(output, dims, 0.55); 
 
-                    // Sprawdzamy czy wykryto główny obiekt "Rezystor" ORAZ przynajmniej jeden pasek kolorowy
+                    // Warunek: Model MUSI widzieć główny obiekt "Rezystor" ORAZ przynajmniej jeden pasek kolorowy
                     const hasResistor = detections.some(d => d.label === "Rezystor");
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
                     if (hasResistor && colorDetections.length > 0) {
-                        handleResistorFound(colorDetections); 
-                        return;
+                        resistorStableCount++;
+                        // Wymagamy potwierdzenia przez 3 kolejne klatki, żeby wyeliminować fałszywe mgnienia/losowe odczyty
+                        if (resistorStableCount >= 3) {
+                            handleResistorFound(colorDetections); 
+                            return;
+                        }
+                    } else {
+                        // Jeśli zgubi obiekt, lekko resetujemy licznik, żeby uniknąć przypadkowego złapania
+                        resistorStableCount = Math.max(0, resistorStableCount - 1);
                     }
                 } catch (err) {
                     console.error("Błąd detekcji:", err);
@@ -467,7 +510,9 @@
             cat.classList.remove('searching');
             cat.classList.add('found');
 
-            // Przełączamy oczy na szczęśliwe (przymrużone) i uśmiech
+            // Przełączamy brwi na uniesione, oczy na świecące łuki, a uśmiech na szeroki
+            document.getElementById('eyebrows-searching').style.display = 'none';
+            document.getElementById('eyebrows-found').style.display = 'block';
             document.getElementById('eyes-searching').style.display = 'none';
             document.getElementById('eyes-found').style.display = 'block';
             document.getElementById('mouth-searching').style.display = 'none';
@@ -476,9 +521,9 @@
             const infoCard = document.getElementById('info-card');
             const infoContent = document.getElementById('info-content');
             
-            let html = `<div class="info-row">Status: <span>Wykryto rezystor i paski!</span></div>`;
+            let html = `<div class="info-row">Status: <span>Wykryto poprawnie rezystor!</span></div>`;
             detections.forEach(det => {
-                html += `<div class="info-row">• Kolor paska: <span>${det.label}</span> (pewność: <span>${det.confidence}%</span>)</div>`;
+                html += `<div class="info-row">• Odczytany pasek: <span>${det.label}</span> (pewność: <span>${det.confidence}%</span>)</div>`;
             });
             
             infoContent.innerHTML = html;
@@ -489,6 +534,7 @@
             frozenCanvas.style.display = 'none';
             video.style.display = 'block';
             document.getElementById('info-card').style.display = 'none';
+            resistorStableCount = 0;
             setSearchingUI();
             isScanning = true;
             scanLoop();
@@ -506,6 +552,8 @@
             cat.classList.remove('found');
             cat.classList.add('searching');
 
+            document.getElementById('eyebrows-searching').style.display = 'block';
+            document.getElementById('eyebrows-found').style.display = 'none';
             document.getElementById('eyes-searching').style.display = 'block';
             document.getElementById('eyes-found').style.display = 'none';
             document.getElementById('mouth-searching').style.display = 'block';
