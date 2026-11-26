@@ -1,700 +1,851 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ResiCat - Skaner Rezystorów</title>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
-    <style>
-        :root {
-            --bg-color: #161622;
-            --card-bg: #222234;
-            --accent-blue: #40c4ff;
-            --accent-pink: #ff7eb3;
-            --accent-mint: #4ecca3;
-            --accent-yellow: #ffd369;
-            --text-main: #ffffff;
-            --text-muted: #a0a0b8;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 20px 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        .app-header {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .app-title {
-            font-size: 44px;
-            font-weight: 900;
-            letter-spacing: 6px;
-            color: var(--text-main);
-            margin: 0;
-            text-transform: uppercase;
-            display: flex;
-            align-items: flex-end;
-            text-shadow: 0 2px 20px rgba(64, 196, 255, 0.4);
-        }
-
-        .letter-i-container {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            margin: 0 -2px;
-        }
-
-        .cat-paw-dot {
-            width: 24px;                  
-            height: 22px;                 
-            margin-bottom: 2px;           
-            transform: rotate(12deg);     
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        }
-
-        .controls-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            margin-bottom: 5px;
-            min-height: 45px;
-            flex-wrap: wrap;
-            width: 100%;
-            max-width: 340px;
-        }
-
-        #flashlight-btn {
-            background: var(--card-bg);
-            border: 2px solid #33334d;
-            color: var(--text-muted);
-            border-radius: 12px;
-            padding: 8px 12px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s;
-        }
-
-        #flashlight-btn.active {
-            background: rgba(255, 211, 105, 0.15);
-            border-color: var(--accent-yellow);
-            color: var(--accent-yellow);
-            box-shadow: 0 0 10px rgba(255, 211, 105, 0.3);
-        }
-
-        #status-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        #status-text {
-            font-size: 24px;
-            font-weight: 900;
-            letter-spacing: 2px;
-            color: var(--accent-yellow);
-            text-transform: uppercase;
-            margin: 0;
-            transition: color 0.3s;
-        }
-
-        #status-text.found {
-            color: var(--accent-mint);
-            text-shadow: 0 0 12px rgba(78, 204, 163, 0.4);
-        }
-
-        #reset-btn {
-            display: none;
-            background: var(--accent-pink);
-            color: #161622;
-            border: none;
-            border-radius: 12px;
-            padding: 8px 14px;
-            font-size: 13px;
-            font-weight: 800;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(255, 126, 179, 0.4);
-            transition: transform 0.15s;
-            text-transform: uppercase;
-        }
-
-        #reset-btn:active {
-            transform: scale(0.95);
-        }
-
-        .cat-container {
-            width: 240px;
-            height: 160px;
-            margin: 0px auto 5px auto;
-        }
-
-        /* Lekkie, płynne i stabilne animacje zoptymalizowane pod mobilne przeglądarki */
-        @keyframes softTwitchLeft {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(-6deg) translateY(-1px); }
-        }
-
-        @keyframes softTwitchRight {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(6deg) translateY(-1px); }
-        }
-
-        .ear-left-group {
-            animation: softTwitchLeft 3s ease-in-out infinite;
-            transform-origin: 52px 38px;
-        }
-        .ear-right-group {
-            animation: softTwitchRight 3s ease-in-out infinite;
-            transform-origin: 178px 38px;
-        }
-
-        .found .ear-left-group {
-            animation: softTwitchLeft 1.2s ease-in-out infinite;
-            transform-origin: 52px 38px;
-        }
-        .found .ear-right-group {
-            animation: softTwitchRight 1.2s ease-in-out infinite;
-            transform-origin: 178px 38px;
-        }
-
-        .camera-label {
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 3px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-
-        .camera-box {
-            position: relative;
-            width: 100%;
-            max-width: 340px;
-            aspect-ratio: 4 / 3;
-            background: #0d0d14;
-            border-radius: 18px;
-            border: 3px solid #33334d;
-            overflow: hidden;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-
-        .camera-box.found {
-            border-color: var(--accent-mint);
-            box-shadow: 0 0 20px rgba(78, 204, 163, 0.35);
-        }
-
-        video, #frozen-frame {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-
-        #frozen-frame {
-            display: none;
-        }
-
-        #info-card {
-            display: none;
-            width: 100%;
-            max-width: 340px;
-            background: var(--card-bg);
-            border-left: 5px solid var(--accent-mint);
-            border-radius: 14px;
-            padding: 16px 18px;
-            margin-top: 15px;
-            box-sizing: border-box;
-            text-align: left;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-            animation: slideUp 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .info-title {
-            font-size: 16px;
-            font-weight: 800;
-            color: var(--accent-mint);
-            letter-spacing: 1.5px;
-            margin: 0 0 10px 0;
-        }
-
-        .info-row {
-            font-size: 15px;
-            margin: 6px 0;
-            color: var(--text-main);
-        }
-
-        .info-row span {
-            color: var(--accent-yellow);
-            font-weight: 700;
-        }
-
-        #model-status {
-            margin-top: 10px;
-            font-size: 12px;
-            color: var(--text-muted);
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
-
-    <header class="app-header">
-        <h1 class="app-title">
-            RES<span class="letter-i-container">
-                <svg class="cat-paw-dot" viewBox="0 0 32 30" width="100%" height="100%">
-                    <path d="M 16 14 C 11 9, 6 12, 6 17 C 6 21, 11 25, 16 28 C 21 25, 26 21, 26 17 C 26 12, 21 9, 16 14 Z" fill="var(--accent-blue)"/>
-                    <circle cx="8" cy="8" r="3.5" fill="var(--accent-blue)"/>
-                    <circle cx="13" cy="5" r="3.5" fill="var(--accent-blue)"/>
-                    <circle cx="19" cy="5" r="3.5" fill="var(--accent-blue)"/>
-                    <circle cx="24" cy="8" r="3.5" fill="var(--accent-blue)"/>
-                </svg>
-                I
-            </span>CAT
-        </h1>
-    </header>
-
-    <div class="controls-bar">
-        <button id="flashlight-btn" onclick="toggleFlashlight()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path>
-            </svg>
-            Latarka
-        </button>
-        <div id="status-container">
-            <h1 id="status-text">
-                <span id="status-label">ŁADOWANIE...</span>
-            </h1>
-            <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
-        </div>
-    </div>
-
-    <div id="cat-wrapper" class="cat-container searching">
-        <svg viewBox="0 0 230 160" width="100%" height="100%">
-            <g class="ear-left-group">
-                <path d="M 40 45 L 52 8 L 80 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-            </g>
-            <g class="ear-right-group">
-                <path d="M 190 45 L 178 8 L 150 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-            </g>
-            
-            <g id="eyebrows-searching">
-                <ellipse class="eyebrow-left" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-                <ellipse class="eyebrow-right" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            </g>
-
-            <g id="eyebrows-found" style="display: none;">
-                <ellipse class="eyebrow-left-found" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
-                <ellipse class="eyebrow-right-found" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
-            </g>
-
-            <g id="eyes-searching">
-                <circle cx="70" cy="82" r="25" fill="var(--accent-blue)"/>
-                <circle cx="160" cy="82" r="25" fill="var(--accent-blue)"/>
-                <circle cx="70" cy="82" r="21" fill="var(--bg-color)"/>
-                <circle cx="62" cy="73" r="7" fill="#ffffff"/>
-                <circle cx="160" cy="82" r="21" fill="var(--bg-color)"/>
-                <circle cx="152" cy="73" r="7" fill="#ffffff"/>
-            </g>
-
-            <g id="eyes-found" style="display: none;">
-                <path d="M 48 82 Q 70 58 92 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
-                <path d="M 138 82 Q 160 58 182 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
-            </g>
-
-            <line x1="18" y1="92" x2="36" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="16" y1="103" x2="34" y2="102" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="20" y1="114" x2="36" y2="111" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-
-            <line x1="212" y1="92" x2="194" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="214" y1="103" x2="196" y2="102" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="210" y1="114" x2="194" y2="111" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-
-            <polygon points="112,102 122,102 117,110" fill="var(--accent-blue)"/>
-
-            <g id="mouth-searching">
-                <path d="M 108 116 Q 113 121 117 116 Q 121 121 126 116" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            </g>
-
-            <g id="mouth-found" style="display: none;">
-                <path d="M 100 114 Q 117 138 134 114 Z" fill="var(--accent-mint)" stroke="var(--bg-color)" stroke-width="2" stroke-linejoin="round"/>
-                <polygon points="108,116 113,126 118,116" fill="#ffffff"/>
-            </g>
-        </svg>
-    </div>
-
-    <div class="camera-label">KAMERA</div>
-    <div id="camera-box" class="camera-box">
-        <video id="webcam" autoplay playsinline muted></video>
-        <canvas id="frozen-frame"></canvas>
-    </div>
-
-    <div id="info-card">
-        <div class="info-title">INFO:</div>
-        <div id="info-content"></div>
-    </div>
-
-    <div id="model-status">Inicjalizacja aplikacji...</div>
-    <canvas id="ai-canvas" width="320" height="320" style="display:none;"></canvas>
-
-    <script>
-        const CLASS_NAMES = [
-            "Czarny", "Brązowy", "Czerwony", "Pomarańczowy", 
-            "Żółty", "Zielony", "Niebieski", "Fioletowy", 
-            "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
-        ];
-
-        const COLOR_VALUES = {
-            "Czarny": { digit: 0, mult: 1, tempCoeff: 250 },
-            "Brązowy": { digit: 1, mult: 10, tol: 1, tempCoeff: 100 },
-            "Czerwony": { digit: 2, mult: 100, tol: 2, tempCoeff: 50 },
-            "Pomarańczowy": { digit: 3, mult: 1000, tempCoeff: 15 },
-            "Żółty": { digit: 4, mult: 10000, tempCoeff: 25 },
-            "Zielony": { digit: 5, mult: 100000, tol: 0.5, tempCoeff: 20 },
-            "Niebieski": { digit: 6, mult: 1000000, tol: 0.25, tempCoeff: 10 },
-            "Fioletowy": { digit: 7, mult: 10000000, tol: 0.1, tempCoeff: 5 },
-            "Szary": { digit: 8, mult: 100000000, tol: 0.05 },
-            "Biały": { digit: 9, mult: 1000000000 },
-            "Złoty": { mult: 0.1, tol: 5 },
-            "Srebrny": { mult: 0.01, tol: 10 }
-        };
-
-        let session = null;     
-        let isScanning = false; 
-        let resistorStableCount = 0; 
-        let mediaStream = null;
-        let torchOn = false;
-
-        const video = document.getElementById('webcam');
-        const frozenCanvas = document.getElementById('frozen-frame');
-        const aiCanvas = document.getElementById('ai-canvas');
-        const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
-
-        async function initApp() {
-            await startCamera();
-
-            try {
-                document.getElementById('model-status').innerText = 'Ładowanie modelu AI...';
-                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
-                ort.env.wasm.numThreads = 1;
-                
-                session = await ort.InferenceSession.create('./best.onnx');
-                document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
-                
-                setSearchingUI(); 
-            } catch (e) {
-                console.error("Błąd ładowania modelu:", e);
-                document.getElementById('model-status').innerText = 'Błąd wczytywania best.onnx (sprawdź plik)';
-            }
-        }
-
-        async function startCamera() {
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' } 
-                });
-                video.srcObject = mediaStream;
-                video.onloadedmetadata = () => {
-                    isScanning = true;
-                    scanLoop(); 
-                };
-            } catch (err) {
-                console.error("Błąd kamery:", err);
-                document.getElementById('status-label').innerText = 'BRAK KAMERY';
-                document.getElementById('model-status').innerText = 'Zezwól przeglądarce na dostęp do aparatu.';
-            }
-        }
-
-        async function toggleFlashlight() {
-            if (!mediaStream) return;
-            const track = mediaStream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-
-            if (!capabilities.torch) {
-                alert("Twoja przeglądarka lub urządzenie nie obsługuje latarki w ten sposób.");
-                return;
-            }
-
-            try {
-                torchOn = !torchOn;
-                await track.applyConstraints({
-                    advanced: [{ torch: torchOn }]
-                });
-                updateFlashlightUI();
-            } catch (err) {
-                console.error("Nie udało się włączyć latarki:", err);
-            }
-        }
-
-        async function turnOffFlashlight() {
-            if (!mediaStream || !torchOn) return;
-            try {
-                const track = mediaStream.getVideoTracks()[0];
-                torchOn = false;
-                await track.applyConstraints({
-                    advanced: [{ torch: false }]
-                });
-                updateFlashlightUI();
-            } catch (err) {
-                console.error("Błąd wyłączania latarki:", err);
-            }
-        }
-
-        function updateFlashlightUI() {
-            const btn = document.getElementById('flashlight-btn');
-            if (torchOn) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        }
-
-        async function scanLoop() {
-            if (!isScanning) return;
-
-            if (!session) {
-                setTimeout(() => requestAnimationFrame(scanLoop), 200);
-                return;
-            }
-
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                aiCtx.drawImage(video, 0, 0, 320, 320); 
-                const imgData = aiCtx.getImageData(0, 0, 320, 320).data;
-
-                const float32Data = new Float32Array(3 * 320 * 320);
-                for (let i = 0; i < 320 * 320; i++) {
-                    float32Data[i] = imgData[i * 4] / 255.0;                  
-                    float32Data[i + 320 * 320] = imgData[i * 4 + 1] / 255.0;  
-                    float32Data[i + 2 * 320 * 320] = imgData[i * 4 + 2] / 255.0;
-                }
-
-                const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, 320, 320]);
-                
-                try {
-                    const feeds = {};
-                    feeds[session.inputNames[0]] = inputTensor;
-                    const results = await session.run(feeds); 
-                    const output = results[session.outputNames[0]].data;
-                    const dims = results[session.outputNames[0]].dims;
-
-                    const detections = parseYOLOOutput(output, dims, 0.35); 
-                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
-
-                    // Szybkie i czułe wykrywanie pasków
-                    if (colorDetections.length >= 3) {
-                        colorDetections.sort((a, b) => a.x - b.x);
-                        resistorStableCount++;
-                        // Natychmiastowe zatrzymanie i odczyt po zaledwie 2 stabilnych klatkach w kadrze
-                        if (resistorStableCount >= 2) {
-                            handleResistorFound(colorDetections); 
-                            return;
-                        }
-                    } else {
-                        resistorStableCount = Math.max(0, resistorStableCount - 1);
-                    }
-                } catch (err) {
-                    console.error("Błąd detekcji w pętli:", err);
-                }
-            }
-
-            setTimeout(() => requestAnimationFrame(scanLoop), 60); 
-        }
-
-        function parseYOLOOutput(data, dims, confThreshold) {
-            const numFeatures = dims[1];
-            const numAnchors = dims[2];
-            const numClasses = numFeatures - 4;
-            let found = [];
-
-            for (let i = 0; i < numAnchors; i++) {
-                let maxScore = 0;
-                let classId = -1;
-
-                for (let c = 0; c < numClasses; c++) {
-                    const score = data[(4 + c) * numAnchors + i];
-                    if (score > maxScore) {
-                        maxScore = score;
-                        classId = c;
-                    }
-                }
-
-                if (maxScore > confThreshold) {
-                    const label = CLASS_NAMES[classId] || `Klasa #${classId}`;
-                    const xCenter = data[i]; 
-                    if (!found.some(item => item.label === label)) {
-                        found.push({
-                            label: label,
-                            confidence: Math.round(maxScore * 100),
-                            x: xCenter
-                        });
-                    }
-                }
-            }
-            return found;
-        }
-
-        function calculateResistor(bands) {
-            bands.sort((a, b) => a.x - b.x);
-
-            const firstLabel = bands[0].label;
-            if (bands.length > 2 && (firstLabel === "Złoty" || firstLabel === "Srebrny")) {
-                bands.reverse();
-            }
-
-            let ohms = 0;
-            let tolerance = "±5%";
-            let tempCoeff = null;
-
-            if (bands.length >= 4) {
-                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
-                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
-                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                ohms = (d1 * 10 + d2) * mult;
-
-                const tolColor = bands[3].label;
-                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
-                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
-                }
-
-                if (bands.length >= 5) {
-                    const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
-                    const mult5 = COLOR_VALUES[bands[3].label]?.mult ?? 1;
-                    ohms = (d1 * 100 + d2 * 10 + d3) * mult5;
-                    const tolColor5 = bands[4].label;
-                    if (COLOR_VALUES[tolColor5]?.tol !== undefined) {
-                        tolerance = `±${COLOR_VALUES[tolColor5].tol}%`;
-                    }
-                }
-
-                if (bands.length >= 6) {
-                    const tcColor = bands[5].label;
-                    if (COLOR_VALUES[tcColor]?.tempCoeff) {
-                        tempCoeff = `${COLOR_VALUES[tcColor].tempCoeff} ppm/°C`;
-                    }
-                }
-            } else if (bands.length === 3) {
-                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
-                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
-                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                ohms = (d1 * 10 + d2) * mult;
-                tolerance = "±20%";
-            }
-
-            let formattedResistance = ohms + " Ω";
-            if (ohms >= 1000000) {
-                formattedResistance = (ohms / 1000000).toFixed(1).replace('.0', '') + " MΩ";
-            } else if (ohms >= 1000) {
-                formattedResistance = (ohms / 1000).toFixed(1).replace('.0', '') + " kΩ";
-            }
-
-            return {
-                resistance: formattedResistance,
-                tolerance: tolerance,
-                tempCoeff: tempCoeff,
-                orderedBands: bands
-            };
-        }
-
-        async function handleResistorFound(detections) {
-            isScanning = false;
-
-            // Automatyczne wyłączenie latarki w trybie sukcesu MAM!!!
-            await turnOffFlashlight();
-
-            frozenCanvas.width = video.videoWidth;
-            frozenCanvas.height = video.videoHeight;
-            const fCtx = frozenCanvas.getContext('2d');
-            fCtx.drawImage(video, 0, 0, frozenCanvas.width, frozenCanvas.height);
-
-            video.style.display = 'none';
-            frozenCanvas.style.display = 'block';
-
-            const statusLabel = document.getElementById('status-label');
-            statusLabel.innerText = 'MAM!!!';
-            document.getElementById('status-text').classList.add('found');
-
-            document.getElementById('reset-btn').style.display = 'block';
-            document.getElementById('camera-box').classList.add('found');
-
-            const cat = document.getElementById('cat-wrapper');
-            cat.classList.remove('searching');
-            cat.classList.add('found');
-
-            document.getElementById('eyebrows-searching').style.display = 'none';
-            document.getElementById('eyebrows-found').style.display = 'block';
-            document.getElementById('eyes-searching').style.display = 'none';
-            document.getElementById('eyes-found').style.display = 'block';
-            document.getElementById('mouth-searching').style.display = 'none';
-            document.getElementById('mouth-found').style.display = 'block';
-
-            const result = calculateResistor(detections);
-
-            const infoCard = document.getElementById('info-card');
-            const infoContent = document.getElementById('info-content');
-            
-            let html = `<div class="info-row">Wartość: <span>${result.resistance}</span></div>`;
-            html += `<div class="info-row">Tolerancja: <span>${result.tolerance}</span></div>`;
-            if (result.tempCoeff) {
-                html += `<div class="info-row">Współczynnik TK: <span>${result.tempCoeff}</span></div>`;
-            }
-            html += `<hr style="border: 0; border-top: 1px solid #33334d; margin: 8px 0;">`;
-            html += `<div class="info-row" style="font-size: 13px; color: var(--text-muted);">Paski: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
-            
-            infoContent.innerHTML = html;
-            infoCard.style.display = 'block';
-        }
-
-        function resetScanner() {
-            frozenCanvas.style.display = 'none';
-            video.style.display = 'block';
-            document.getElementById('info-card').style.display = 'none';
-            resistorStableCount = 0;
-            setSearchingUI();
+<script>
+"use strict";
+
+const CLASS_NAMES = [
+    "Czarny", "Brązowy", "Czerwony", "Pomarańczowy",
+    "Żółty", "Zielony", "Niebieski", "Fioletowy",
+    "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
+];
+
+const COLOR_VALUES = {
+    "Czarny": { digit: 0, mult: 1 },
+    "Brązowy": { digit: 1, mult: 10, tol: 1, tempCoeff: 100 },
+    "Czerwony": { digit: 2, mult: 100, tol: 2, tempCoeff: 50 },
+    "Pomarańczowy": { digit: 3, mult: 1000, tempCoeff: 15 },
+    "Żółty": { digit: 4, mult: 10000, tempCoeff: 25 },
+    "Zielony": { digit: 5, mult: 100000, tol: 0.5, tempCoeff: 20 },
+    "Niebieski": { digit: 6, mult: 1000000, tol: 0.25, tempCoeff: 10 },
+    "Fioletowy": { digit: 7, mult: 10000000, tol: 0.1, tempCoeff: 5 },
+    "Szary": { digit: 8, mult: 100000000, tol: 0.05 },
+    "Biały": { digit: 9, mult: 1000000000 },
+    "Złoty": { mult: 0.1, tol: 5 },
+    "Srebrny": { mult: 0.01, tol: 10 }
+};
+
+const MODEL_SIZE = 320;
+const COLOR_CONFIDENCE = 0.48;
+const RESISTOR_CONFIDENCE = 0.55;
+
+const STABILITY_REQUIRED = 5;
+const STABILITY_WINDOW = 8;
+const STABILITY_MAX_AGE_MS = 1400;
+const STABILITY_MIN_SPAN_MS = 350;
+
+const NMS_IOU_THRESHOLD = 0.45;
+
+let session = null;
+let isScanning = false;
+let scanBusy = false;
+let stabilityBuffer = [];
+let mediaStream = null;
+let torchOn = false;
+let torchBusy = false;
+
+const video = document.getElementById('webcam');
+const frozenCanvas = document.getElementById('frozen-frame');
+const aiCanvas = document.getElementById('ai-canvas');
+const aiCtx = aiCanvas.getContext('2d', {
+    willReadFrequently: true
+});
+
+async function initApp() {
+    await startCamera();
+
+    try {
+        document.getElementById('model-status').innerText =
+            'Ładowanie modelu AI...';
+
+        ort.env.wasm.wasmPaths =
+            "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+
+        ort.env.wasm.numThreads = 1;
+
+        session = await ort.InferenceSession.create('./best.onnx');
+
+        document.getElementById('model-status').innerText =
+            'AI gotowe • stabilizacja aktywna';
+
+        setSearchingUI();
+
+        if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
             isScanning = true;
             scanLoop();
         }
 
-        function setSearchingUI() {
-            const statusLabel = document.getElementById('status-label');
-            statusLabel.innerText = 'SZUKAM...';
-            document.getElementById('status-text').classList.remove('found');
+    } catch (e) {
+        console.error("Błąd ładowania modelu:", e);
 
-            document.getElementById('reset-btn').style.display = 'none';
-            document.getElementById('camera-box').classList.remove('found');
+        document.getElementById('model-status').innerText =
+            'Błąd wczytywania best.onnx';
+    }
+}
 
-            const cat = document.getElementById('cat-wrapper');
-            cat.classList.remove('found');
-            cat.classList.add('searching');
-
-            document.getElementById('eyebrows-searching').style.display = 'block';
-            document.getElementById('eyebrows-found').style.display = 'none';
-            document.getElementById('eyes-searching').style.display = 'block';
-            document.getElementById('eyes-found').style.display = 'none';
-            document.getElementById('mouth-searching').style.display = 'block';
-            document.getElementById('mouth-found').style.display = 'none';
+async function startCamera() {
+    try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+            throw new Error('Brak obsługi kamery.');
         }
 
-        initApp();
-    </script>
-</body>
-</html>
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 960 }
+            }
+        });
+
+        video.srcObject = mediaStream;
+        await video.play();
+
+        if (session && !isScanning) {
+            isScanning = true;
+            scanLoop();
+        }
+
+    } catch (err) {
+        console.error("Błąd kamery:", err);
+
+        document.getElementById('status-label').innerText =
+            'BRAK KAMERY';
+
+        document.getElementById('model-status').innerText =
+            'Zezwól przeglądarce na dostęp do aparatu.';
+    }
+}
+
+// LATARKA
+
+async function toggleFlashlight() {
+    if (!mediaStream || torchBusy) return;
+
+    const track = mediaStream.getVideoTracks()[0];
+
+    const capabilities = track.getCapabilities
+        ? track.getCapabilities()
+        : {};
+
+    if (!capabilities.torch) {
+        alert('Twoje urządzenie nie obsługuje latarki.');
+        return;
+    }
+
+    torchBusy = true;
+
+    const requestedState = !torchOn;
+
+    try {
+        await track.applyConstraints({
+            advanced: [{ torch: requestedState }]
+        });
+
+        torchOn = requestedState;
+        updateFlashlightUI();
+
+    } catch (err) {
+        console.error('Błąd latarki:', err);
+
+    } finally {
+        torchBusy = false;
+    }
+}
+
+async function turnOffFlashlight() {
+    if (!mediaStream || !torchOn) return;
+
+    const track = mediaStream.getVideoTracks()[0];
+
+    try {
+        if (track && track.readyState === 'live') {
+            await track.applyConstraints({
+                advanced: [{ torch: false }]
+            });
+        }
+
+    } catch (err) {
+        console.warn('Nie udało się wyłączyć latarki:', err);
+
+    } finally {
+        torchOn = false;
+        updateFlashlightUI();
+    }
+}
+
+function updateFlashlightUI() {
+    const btn = document.getElementById('flashlight-btn');
+
+    btn.classList.toggle('active', torchOn);
+    btn.setAttribute('aria-pressed', String(torchOn));
+}
+
+// PĘTLA SKANOWANIA
+
+function scheduleNextScan(delay = 70) {
+    if (!isScanning) return;
+
+    setTimeout(() => {
+        requestAnimationFrame(scanLoop);
+    }, delay);
+}
+
+async function scanLoop() {
+    if (!isScanning || scanBusy) return;
+
+    if (!session ||
+        video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) {
+        scheduleNextScan(150);
+        return;
+    }
+
+    scanBusy = true;
+
+    try {
+        aiCtx.drawImage(video, 0, 0, MODEL_SIZE, MODEL_SIZE);
+
+        const imgData = aiCtx.getImageData(
+            0, 0, MODEL_SIZE, MODEL_SIZE
+        ).data;
+
+        const plane = MODEL_SIZE * MODEL_SIZE;
+        const float32Data = new Float32Array(3 * plane);
+
+        for (let i = 0; i < plane; i++) {
+            float32Data[i] = imgData[i * 4] / 255;
+            float32Data[i + plane] = imgData[i * 4 + 1] / 255;
+            float32Data[i + plane * 2] = imgData[i * 4 + 2] / 255;
+        }
+
+        const inputTensor = new ort.Tensor(
+            'float32',
+            float32Data,
+            [1, 3, MODEL_SIZE, MODEL_SIZE]
+        );
+
+        const feeds = {};
+        feeds[session.inputNames[0]] = inputTensor;
+
+        const results = await session.run(feeds);
+        const outputTensor = results[session.outputNames[0]];
+
+        const detections = parseYOLOOutput(
+            outputTensor.data,
+            outputTensor.dims
+        );
+
+        const candidate = findBestBandGroup(detections);
+
+        updateStability(candidate);
+
+        const stableGroup = getStableGroup();
+
+        if (stableGroup) {
+            await handleResistorFound(stableGroup);
+            return;
+        }
+
+    } catch (err) {
+        console.error('Błąd detekcji:', err);
+
+        stabilityBuffer.push({
+            time: Date.now(),
+            group: null
+        });
+
+        trimStabilityBuffer();
+
+    } finally {
+        scanBusy = false;
+    }
+
+    scheduleNextScan(70);
+}
+
+// ODCZYT WYJŚCIA YOLO
+
+function parseYOLOOutput(data, dims) {
+    if (!dims || dims.length < 3) {
+        throw new Error('Nieprawidłowy format YOLO.');
+    }
+
+    let features;
+    let anchors;
+    let featureMajor;
+
+    if (dims[1] >= CLASS_NAMES.length + 4 &&
+        dims[1] <= CLASS_NAMES.length + 5) {
+
+        features = dims[1];
+        anchors = dims[2];
+        featureMajor = true;
+
+    } else if (
+        dims[2] >= CLASS_NAMES.length + 4 &&
+        dims[2] <= CLASS_NAMES.length + 5
+    ) {
+
+        features = dims[2];
+        anchors = dims[1];
+        featureMajor = false;
+
+    } else {
+        throw new Error(
+            'Nie można rozpoznać formatu wyjścia modelu.'
+        );
+    }
+
+    const read = (anchor, feature) => {
+        return featureMajor
+            ? data[feature * anchors + anchor]
+            : data[anchor * features + feature];
+    };
+
+    const raw = [];
+
+    for (let i = 0; i < anchors; i++) {
+        let bestScore = 0;
+        let classId = -1;
+
+        for (let c = 0; c < CLASS_NAMES.length; c++) {
+            const score = read(i, 4 + c);
+
+            if (score > bestScore) {
+                bestScore = score;
+                classId = c;
+            }
+        }
+
+        if (classId < 0) continue;
+
+        const label = CLASS_NAMES[classId];
+
+        const threshold = label === 'Rezystor'
+            ? RESISTOR_CONFIDENCE
+            : COLOR_CONFIDENCE;
+
+        if (bestScore < threshold) continue;
+
+        let cx = read(i, 0);
+        let cy = read(i, 1);
+        let w = read(i, 2);
+        let h = read(i, 3);
+
+        if (Math.max(
+            Math.abs(cx),
+            Math.abs(cy),
+            Math.abs(w),
+            Math.abs(h)
+        ) <= 2) {
+            cx *= MODEL_SIZE;
+            cy *= MODEL_SIZE;
+            w *= MODEL_SIZE;
+            h *= MODEL_SIZE;
+        }
+
+        if (![cx, cy, w, h].every(Number.isFinite)) continue;
+        if (w <= 1 || h <= 1) continue;
+
+        raw.push({
+            label,
+            classId,
+            confidence: bestScore,
+            x: cx,
+            y: cy,
+            w,
+            h,
+            x1: cx - w / 2,
+            y1: cy - h / 2,
+            x2: cx + w / 2,
+            y2: cy + h / 2
+        });
+    }
+
+    return nonMaximumSuppression(raw, NMS_IOU_THRESHOLD);
+}
+
+// USUWANIE NAKŁADAJĄCYCH SIĘ DETEKCJI
+
+function boxIoU(a, b) {
+    const x1 = Math.max(a.x1, b.x1);
+    const y1 = Math.max(a.y1, b.y1);
+    const x2 = Math.min(a.x2, b.x2);
+    const y2 = Math.min(a.y2, b.y2);
+
+    const intersection =
+        Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+
+    const union =
+        a.w * a.h + b.w * b.h - intersection;
+
+    return union > 0 ? intersection / union : 0;
+}
+
+function nonMaximumSuppression(detections, threshold) {
+    const sorted = [...detections].sort(
+        (a, b) => b.confidence - a.confidence
+    );
+
+    const kept = [];
+
+    for (const detection of sorted) {
+        const overlaps = kept.some(item =>
+            item.classId === detection.classId &&
+            boxIoU(item, detection) > threshold
+        );
+
+        if (!overlaps) kept.push(detection);
+    }
+
+    return kept;
+}
+
+// GEOMETRIA PASKÓW
+
+function findBestBandGroup(detections) {
+    const bands = detections
+        .filter(d => d.label !== 'Rezystor')
+        .filter(d => d.x > 18 && d.x < MODEL_SIZE - 18)
+        .filter(d => d.y > 12 && d.y < MODEL_SIZE - 12)
+        .filter(d => d.w >= 2 && d.h >= 3)
+        .filter(d => d.h / d.w >= 0.55)
+        .sort((a, b) => a.x - b.x);
+
+    if (bands.length < 3) return null;
+
+    const groups = [];
+
+    for (
+        let count = 3;
+        count <= Math.min(6, bands.length);
+        count++
+    ) {
+        for (
+            let start = 0;
+            start <= bands.length - count;
+            start++
+        ) {
+            const group = bands.slice(start, start + count);
+
+            const geometry = validateBandGeometry(group);
+
+            if (!geometry.valid) continue;
+
+            groups.push({
+                bands: group,
+                labels: group.map(b => b.label),
+                xs: group.map(b => b.x / MODEL_SIZE),
+                ys: group.map(b => b.y / MODEL_SIZE),
+                score: geometry.score +
+                    group.reduce(
+                        (sum, b) => sum + b.confidence, 0
+                    ) / count
+            });
+        }
+    }
+
+    groups.sort((a, b) => b.score - a.score);
+
+    return groups[0] || null;
+}
+
+function validateBandGeometry(group) {
+    const xs = group.map(b => b.x);
+    const ys = group.map(b => b.y);
+    const heights = group.map(b => b.h);
+    const widths = group.map(b => b.w);
+
+    const span = xs[xs.length - 1] - xs[0];
+
+    const ySpread =
+        Math.max(...ys) - Math.min(...ys);
+
+    const median = arr => {
+        const sorted = [...arr].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)];
+    };
+
+    const gaps = xs.slice(1).map(
+        (x, i) => x - xs[i]
+    );
+
+    const medianGap = median(gaps);
+    const medianHeight = median(heights);
+    const medianWidth = median(widths);
+
+    if (span < MODEL_SIZE * 0.10) return { valid: false };
+    if (span > MODEL_SIZE * 0.78) return { valid: false };
+
+    if (ySpread > MODEL_SIZE * 0.12) return { valid: false };
+
+    if (medianGap < 5) return { valid: false };
+
+    if (Math.max(...gaps) > medianGap * 3.2) {
+        return { valid: false };
+    }
+
+    if (medianWidth > medianGap * 1.35) {
+        return { valid: false };
+    }
+
+    if (medianHeight < 4) return { valid: false };
+
+    if (medianHeight > MODEL_SIZE * 0.55) {
+        return { valid: false };
+    }
+
+    if (
+        Math.max(...heights) /
+        Math.max(1, Math.min(...heights)) > 3.2
+    ) {
+        return { valid: false };
+    }
+
+    if (
+        Math.max(...widths) /
+        Math.max(1, Math.min(...widths)) > 4.5
+    ) {
+        return { valid: false };
+    }
+
+    const gapVariation = gaps.reduce(
+        (sum, gap) => sum + Math.abs(gap - medianGap),
+        0
+    ) / gaps.length;
+
+    const score =
+        1 -
+        ySpread / (MODEL_SIZE * 0.12) -
+        gapVariation / Math.max(1, medianGap);
+
+    return { valid: true, score };
+}
+
+// STABILIZACJA W CZASIE
+
+function updateStability(candidate) {
+    stabilityBuffer.push({
+        time: Date.now(),
+
+        group: candidate ? {
+            labels: [...candidate.labels],
+            xs: [...candidate.xs],
+            ys: [...candidate.ys],
+            bands: candidate.bands.map(b => ({ ...b }))
+        } : null
+    });
+
+    trimStabilityBuffer();
+}
+
+function trimStabilityBuffer() {
+    const cutoff = Date.now() - STABILITY_MAX_AGE_MS;
+
+    stabilityBuffer = stabilityBuffer
+        .filter(item => item.time >= cutoff)
+        .slice(-STABILITY_WINDOW);
+}
+
+function getStableGroup() {
+    const validFrames = stabilityBuffer.filter(
+        item => item.group
+    );
+
+    if (validFrames.length < STABILITY_REQUIRED) {
+        return null;
+    }
+
+    const latest = validFrames[validFrames.length - 1];
+
+    const matching = validFrames.filter(item =>
+        groupsMatch(item.group, latest.group)
+    );
+
+    if (matching.length < STABILITY_REQUIRED) {
+        return null;
+    }
+
+    const selected = matching.slice(-STABILITY_REQUIRED);
+
+    if (
+        selected[selected.length - 1].time -
+        selected[0].time < STABILITY_MIN_SPAN_MS
+    ) {
+        return null;
+    }
+
+    const count = latest.group.labels.length;
+    const averagedBands = [];
+
+    for (let i = 0; i < count; i++) {
+        const samples = selected.map(
+            item => item.group.bands[i]
+        );
+
+        const average = key =>
+            samples.reduce(
+                (sum, band) => sum + band[key], 0
+            ) / samples.length;
+
+        averagedBands.push({
+            ...samples[samples.length - 1],
+            x: average('x'),
+            y: average('y'),
+            w: average('w'),
+            h: average('h'),
+            confidence: average('confidence')
+        });
+    }
+
+    return averagedBands;
+}
+
+function groupsMatch(a, b) {
+    if (a.labels.length !== b.labels.length) return false;
+
+    for (let i = 0; i < a.labels.length; i++) {
+        if (a.labels[i] !== b.labels[i]) return false;
+
+        if (Math.abs(a.xs[i] - b.xs[i]) > 0.045) {
+            return false;
+        }
+
+        if (Math.abs(a.ys[i] - b.ys[i]) > 0.065) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// OBLICZANIE REZYSTANCJI
+
+function calculateResistor(bands) {
+    const ordered = [...bands].sort(
+        (a, b) => a.x - b.x
+    );
+
+    if (ordered.length < 3 || ordered.length > 6) {
+        throw new Error('Nieprawidłowa liczba pasków.');
+    }
+
+    if (
+        ordered.length >= 4 &&
+        (
+            ordered[0].label === 'Złoty' ||
+            ordered[0].label === 'Srebrny'
+        )
+    ) {
+        ordered.reverse();
+    }
+
+    const digitCount = ordered.length >= 5 ? 3 : 2;
+
+    const digits = ordered
+        .slice(0, digitCount)
+        .map(b => COLOR_VALUES[b.label]?.digit);
+
+    if (digits.some(value => value === undefined)) {
+        throw new Error('Nieprawidłowy kolor cyfry.');
+    }
+
+    const multiplier =
+        COLOR_VALUES[ordered[digitCount].label]?.mult;
+
+    if (multiplier === undefined) {
+        throw new Error('Nieprawidłowy mnożnik.');
+    }
+
+    let numericDigits = 0;
+
+    for (const digit of digits) {
+        numericDigits = numericDigits * 10 + digit;
+    }
+
+    const ohms = numericDigits * multiplier;
+
+    let tolerance = '±20%';
+    let tempCoeff = null;
+
+    if (ordered.length >= 4) {
+        const toleranceColor =
+            ordered[digitCount + 1]?.label;
+
+        const toleranceValue =
+            COLOR_VALUES[toleranceColor]?.tol;
+
+        if (toleranceValue === undefined) {
+            throw new Error('Nieprawidłowy pasek tolerancji.');
+        }
+
+        tolerance = `±${toleranceValue}%`;
+    }
+
+    if (ordered.length === 6) {
+        const tc = COLOR_VALUES[ordered[5].label]?.tempCoeff;
+
+        if (tc !== undefined) {
+            tempCoeff = `${tc} ppm/°C`;
+        }
+    }
+
+    let formattedResistance = `${ohms} Ω`;
+
+    if (ohms >= 1000000) {
+        formattedResistance =
+            `${(ohms / 1000000).toFixed(2)} MΩ`;
+    } else if (ohms >= 1000) {
+        formattedResistance =
+            `${(ohms / 1000).toFixed(2)} kΩ`;
+    }
+
+    return {
+        resistance: formattedResistance,
+        tolerance,
+        tempCoeff,
+        orderedBands: ordered
+    };
+}
+
+// SUKCES – MAM!!!
+
+async function handleResistorFound(detections) {
+    if (!isScanning) return;
+
+    isScanning = false;
+    stabilityBuffer = [];
+
+    // Zamrożenie klatki przed wyłączeniem latarki.
+    frozenCanvas.width = video.videoWidth || MODEL_SIZE;
+    frozenCanvas.height = video.videoHeight || MODEL_SIZE;
+
+    const fCtx = frozenCanvas.getContext('2d');
+
+    fCtx.drawImage(
+        video,
+        0,
+        0,
+        frozenCanvas.width,
+        frozenCanvas.height
+    );
+
+    // Automatyczne wyłączenie flesza.
+    await turnOffFlashlight();
+
+    video.style.display = 'none';
+    frozenCanvas.style.display = 'block';
+
+    document.getElementById('status-label').innerText = 'MAM!!!';
+
+    document.getElementById('status-text').classList.add('found');
+
+    document.getElementById('reset-btn').style.display = 'block';
+
+    document.getElementById('camera-box').classList.add('found');
+
+    const cat = document.getElementById('cat-wrapper');
+
+    cat.classList.remove('searching');
+    cat.classList.add('found');
+
+    document.getElementById('eyebrows-searching').style.display = 'none';
+    document.getElementById('eyebrows-found').style.display = 'block';
+
+    document.getElementById('eyes-searching').style.display = 'none';
+    document.getElementById('eyes-found').style.display = 'block';
+
+    document.getElementById('mouth-searching').style.display = 'none';
+    document.getElementById('mouth-found').style.display = 'block';
+
+    const infoCard = document.getElementById('info-card');
+    const infoContent = document.getElementById('info-content');
+
+    try {
+        const result = calculateResistor(detections);
+
+        let html =
+            `<div class="info-row">Wartość: <span>${result.resistance}</span></div>`;
+
+        html +=
+            `<div class="info-row">Tolerancja: <span>${result.tolerance}</span></div>`;
+
+        if (result.tempCoeff) {
+            html +=
+                `<div class="info-row">Współczynnik TK: <span>${result.tempCoeff}</span></div>`;
+        }
+
+        html +=
+            `<hr style="border:0;border-top:1px solid #33334d;margin:8px 0;">`;
+
+        html +=
+            `<div class="info-row" style="font-size:13px;color:var(--text-muted);">Paski: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
+
+        infoContent.innerHTML = html;
+
+    } catch (err) {
+        console.error('Błąd obliczania rezystancji:', err);
+
+        infoContent.innerHTML =
+            `<div class="info-row">Wykryto paski, ale ich układ wymaga sprawdzenia.</div>` +
+            `<div class="info-row">Paski: ${detections.map(b => b.label).join(', ')}</div>`;
+    }
+
+    infoCard.style.display = 'block';
+
+    document.getElementById('model-status').innerText =
+        'Odczyt ustabilizowany • latarka wyłączona';
+}
+
+// PONOWNE SKANOWANIE
+
+function resetScanner() {
+    frozenCanvas.style.display = 'none';
+    video.style.display = 'block';
+
+    document.getElementById('info-card').style.display = 'none';
+
+    stabilityBuffer = [];
+
+    setSearchingUI();
+
+    if (!isScanning) {
+        isScanning = true;
+        scanLoop();
+    }
+}
+
+// INTERFEJS
+
+function setSearchingUI() {
+    document.getElementById('status-label').innerText = 'SZUKAM...';
+
+    document.getElementById('status-text').classList.remove('found');
+
+    document.getElementById('reset-btn').style.display = 'none';
+
+    document.getElementById('camera-box').classList.remove('found');
+
+    const cat = document.getElementById('cat-wrapper');
+
+    cat.classList.remove('found');
+    cat.classList.add('searching');
+
+    document.getElementById('eyebrows-searching').style.display = 'block';
+    document.getElementById('eyebrows-found').style.display = 'none';
+
+    document.getElementById('eyes-searching').style.display = 'block';
+    document.getElementById('eyes-found').style.display = 'none';
+
+    document.getElementById('mouth-searching').style.display = 'block';
+    document.getElementById('mouth-found').style.display = 'none';
+}
+
+window.addEventListener('pagehide', () => {
+    isScanning = false;
+
+    if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+    }
+});
+
+initApp();
+
+</script>
