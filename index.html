@@ -303,7 +303,7 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- / SEKCJA HTML: GRAFIKA KOTA (KERFUŚ STYL)    -->
+    <!-- / SEKCJA HTML: GRAFIKA KOTA                -->
     <!-- ========================================== -->
     <div id="cat-wrapper" class="cat-container searching">
         <svg viewBox="0 0 230 160" width="100%" height="100%">
@@ -406,7 +406,12 @@
         async function initApp() {
             try {
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-                session = await ort.InferenceSession.create('./best.onnx'); // Ładowanie pliku modelu
+                session = await ort.InferenceSession.create('./best.onnx', {
+    externalData: [{
+        path: 'best.onnx.data',
+        url: './best.onnx.data'
+    }]
+});
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
                 await startCamera(); // Uruchomienie aparatu po załadowaniu AI
             } catch (e) {
