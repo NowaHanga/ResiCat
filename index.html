@@ -392,7 +392,7 @@
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
                 ort.env.wasm.numThreads = 1; // Wyłączenie wielowątkowości blokowanej przez przeglądarkę
                 
-                session = await ort.InferenceSession.create('https://raw.githubusercontent.com/NowaHanga/ResiCat/main/best.onnx');
+                session = await ort.InferenceSession.create('./best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
                 await startCamera(); 
             } catch (e) {
