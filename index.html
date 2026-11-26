@@ -144,62 +144,33 @@
             margin: 0px auto 5px auto;
         }
 
+        /* Lekkie, płynne i stabilne animacje zoptymalizowane pod mobilne przeglądarki */
         @keyframes softTwitchLeft {
             0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(-7deg) translateY(-1.5px); }
+            50% { transform: rotate(-6deg) translateY(-1px); }
         }
 
         @keyframes softTwitchRight {
             0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(7deg) translateY(-1.5px); }
-        }
-
-        @keyframes softLook {
-            0%, 100% { transform: translate(0px, 0px); }
-            50% { transform: translate(-2px, 0.5px); }
-        }
-
-        @keyframes glowEyes {
-            0%, 100% { filter: drop-shadow(0 0 2px var(--accent-mint)); transform: scale(1); }
-            50% { filter: drop-shadow(0 0 8px var(--accent-mint)); transform: scale(1.03); }
-        }
-
-        .searching .pupils-moving {
-            animation: softLook 3.5s ease-in-out infinite;
+            50% { transform: rotate(6deg) translateY(-1px); }
         }
 
         .ear-left-group {
-            animation: softTwitchLeft 2.5s ease-in-out infinite;
+            animation: softTwitchLeft 3s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
         .ear-right-group {
-            animation: softTwitchRight 2.5s ease-in-out infinite;
+            animation: softTwitchRight 3s ease-in-out infinite;
             transform-origin: 178px 38px;
-        }
-
-        .found .happy-eyes-anim {
-            animation: glowEyes 1.8s ease-in-out infinite;
-            transform-origin: center;
         }
 
         .found .ear-left-group {
-            animation: softTwitchLeft 1.0s ease-in-out infinite;
+            animation: softTwitchLeft 1.2s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
         .found .ear-right-group {
-            animation: softTwitchRight 1.0s ease-in-out infinite;
+            animation: softTwitchRight 1.2s ease-in-out infinite;
             transform-origin: 178px 38px;
-        }
-
-        .found .eyebrow-left-found {
-            transform: translateY(-6px) rotate(-12deg);
-            transform-origin: 70px 45px;
-            transition: transform 0.3s ease;
-        }
-        .found .eyebrow-right-found {
-            transform: translateY(-6px) rotate(12deg);
-            transform-origin: 160px 45px;
-            transition: transform 0.3s ease;
         }
 
         .camera-label {
@@ -312,7 +283,7 @@
         </button>
         <div id="status-container">
             <h1 id="status-text">
-                <span id="status-label">ŁADOWANIE</span>
+                <span id="status-label">ŁADOWANIE...</span>
             </h1>
             <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
         </div>
@@ -340,19 +311,13 @@
             <g id="eyes-searching">
                 <circle cx="70" cy="82" r="25" fill="var(--accent-blue)"/>
                 <circle cx="160" cy="82" r="25" fill="var(--accent-blue)"/>
-                <g class="pupils-moving">
-                    <circle cx="70" cy="82" r="21" fill="var(--bg-color)"/>
-                    <circle cx="62" cy="73" r="7" fill="#ffffff"/>
-                    <circle cx="79" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
-                </g>
-                <g class="pupils-moving">
-                    <circle cx="160" cy="82" r="21" fill="var(--bg-color)"/>
-                    <circle cx="152" cy="73" r="7" fill="#ffffff"/>
-                    <circle cx="169" cy="91" r="3" fill="rgba(255,255,255,0.6)"/>
-                </g>
+                <circle cx="70" cy="82" r="21" fill="var(--bg-color)"/>
+                <circle cx="62" cy="73" r="7" fill="#ffffff"/>
+                <circle cx="160" cy="82" r="21" fill="var(--bg-color)"/>
+                <circle cx="152" cy="73" r="7" fill="#ffffff"/>
             </g>
 
-            <g id="eyes-found" class="happy-eyes-anim" style="display: none;">
+            <g id="eyes-found" style="display: none;">
                 <path d="M 48 82 Q 70 58 92 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
                 <path d="M 138 82 Q 160 58 182 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
             </g>
@@ -426,7 +391,6 @@
         const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
         async function initApp() {
-            // Na start cały czas jest status ŁADOWANIE...
             await startCamera();
 
             try {
@@ -437,7 +401,6 @@
                 session = await ort.InferenceSession.create('./best.onnx');
                 document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
                 
-                // Dopiero gdy kamera działa i model AI jest załadowany, zmieniamy na SZUKAM...
                 setSearchingUI(); 
             } catch (e) {
                 console.error("Błąd ładowania modelu:", e);
@@ -534,19 +497,17 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.40); 
+                    const detections = parseYOLOOutput(output, dims, 0.35); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
+                    // Szybkie i czułe wykrywanie pasków
                     if (colorDetections.length >= 3) {
                         colorDetections.sort((a, b) => a.x - b.x);
-                        const spanX = colorDetections[colorDetections.length - 1].x - colorDetections[0].x;
-
-                        if (spanX > 0.02 && spanX < 0.60) {
-                            resistorStableCount++;
-                            if (resistorStableCount >= 2) {
-                                handleResistorFound(colorDetections); 
-                                return;
-                            }
+                        resistorStableCount++;
+                        // Natychmiastowe zatrzymanie i odczyt po zaledwie 2 stabilnych klatkach w kadrze
+                        if (resistorStableCount >= 2) {
+                            handleResistorFound(colorDetections); 
+                            return;
                         }
                     } else {
                         resistorStableCount = Math.max(0, resistorStableCount - 1);
@@ -556,7 +517,7 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 80); 
+            setTimeout(() => requestAnimationFrame(scanLoop), 60); 
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
@@ -657,7 +618,7 @@
         async function handleResistorFound(detections) {
             isScanning = false;
 
-            // Automatyczne wyłączenie latarki po wykryciu rezystora
+            // Automatyczne wyłączenie latarki w trybie sukcesu MAM!!!
             await turnOffFlashlight();
 
             frozenCanvas.width = video.videoWidth;
@@ -715,7 +676,7 @@
 
         function setSearchingUI() {
             const statusLabel = document.getElementById('status-label');
-            statusLabel.innerText = 'SZUKAM';
+            statusLabel.innerText = 'SZUKAM...';
             document.getElementById('status-text').classList.remove('found');
 
             document.getElementById('reset-btn').style.display = 'none';
