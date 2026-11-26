@@ -119,31 +119,6 @@
             text-shadow: 0 0 12px rgba(78, 204, 163, 0.4);
         }
 
-        .messenger-dots {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            vertical-align: middle;
-        }
-
-        .messenger-dots span {
-            width: 6px;
-            height: 6px;
-            background-color: var(--accent-yellow);
-            border-radius: 50%;
-            display: inline-block;
-            animation: messengerBounce 2.2s infinite ease-in-out both;
-        }
-
-        .messenger-dots span:nth-child(1) { animation-delay: -0.4s; }
-        .messenger-dots span:nth-child(2) { animation-delay: -0.2s; }
-        .messenger-dots span:nth-child(3) { animation-delay: 0s; }
-
-        @keyframes messengerBounce {
-            0%, 80%, 100% { transform: scale(0.4); opacity: 0.3; }
-            40% { transform: scale(1.1); opacity: 1; }
-        }
-
         #reset-btn {
             display: none;
             background: var(--accent-pink);
@@ -169,63 +144,63 @@
             margin: 0px auto 5px auto;
         }
 
-        /* W pełni płynne animacje uszu i oczu oparte o funkcje przejścia */
-        @keyframes smoothTwitchLeft {
-            0%, 100% { transform: rotate(0deg) translateY(0); }
-            50% { transform: rotate(-10deg) translateY(-2.5px); }
+        /* Lekkie, całkowicie płynne animacje dla kota (bez obciążania telefonu) */
+        @keyframes softTwitchLeft {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-7deg) translateY(-1.5px); }
         }
 
-        @keyframes smoothTwitchRight {
-            0%, 100% { transform: rotate(0deg) translateY(0); }
-            50% { transform: rotate(10deg) translateY(-2.5px); }
+        @keyframes softTwitchRight {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(7deg) translateY(-1.5px); }
         }
 
-        @keyframes lookAroundSmooth {
+        @keyframes softLook {
             0%, 100% { transform: translate(0px, 0px); }
-            50% { transform: translate(-3px, 1px); }
+            50% { transform: translate(-2px, 0.5px); }
         }
 
         @keyframes glowEyes {
             0%, 100% { filter: drop-shadow(0 0 2px var(--accent-mint)); transform: scale(1); }
-            50% { filter: drop-shadow(0 0 10px var(--accent-mint)); transform: scale(1.05); }
+            50% { filter: drop-shadow(0 0 8px var(--accent-mint)); transform: scale(1.03); }
         }
 
         .searching .pupils-moving {
-            animation: lookAroundSmooth 4.5s ease-in-out infinite;
+            animation: softLook 3.5s ease-in-out infinite;
         }
 
         .ear-left-group {
-            animation: smoothTwitchLeft 2.8s ease-in-out infinite;
+            animation: softTwitchLeft 2.5s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
         .ear-right-group {
-            animation: smoothTwitchRight 2.8s ease-in-out infinite;
+            animation: softTwitchRight 2.5s ease-in-out infinite;
             transform-origin: 178px 38px;
         }
 
         .found .happy-eyes-anim {
-            animation: glowEyes 2s ease-in-out infinite;
+            animation: glowEyes 1.8s ease-in-out infinite;
             transform-origin: center;
         }
 
         .found .ear-left-group {
-            animation: smoothTwitchLeft 1.2s ease-in-out infinite;
+            animation: softTwitchLeft 1.0s ease-in-out infinite;
             transform-origin: 52px 38px;
         }
         .found .ear-right-group {
-            animation: smoothTwitchRight 1.2s ease-in-out infinite;
+            animation: softTwitchRight 1.0s ease-in-out infinite;
             transform-origin: 178px 38px;
         }
 
         .found .eyebrow-left-found {
             transform: translateY(-6px) rotate(-12deg);
             transform-origin: 70px 45px;
-            transition: transform 0.4s ease;
+            transition: transform 0.3s ease;
         }
         .found .eyebrow-right-found {
             transform: translateY(-6px) rotate(12deg);
             transform-origin: 160px 45px;
-            transition: transform 0.4s ease;
+            transition: transform 0.3s ease;
         }
 
         .camera-label {
@@ -338,10 +313,7 @@
         </button>
         <div id="status-container">
             <h1 id="status-text">
-                <span id="status-label">ŁADOWANIE</span>
-                <span id="messenger-loader" class="messenger-dots">
-                    <span></span><span></span><span></span>
-                </span>
+                <span id="status-label">SZUKAM</span>
             </h1>
             <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
         </div>
@@ -446,7 +418,6 @@
         let session = null;     
         let isScanning = false; 
         let resistorStableCount = 0; 
-        let lastBandsCount = 0;
         let mediaStream = null;
         let torchOn = false;
 
@@ -485,7 +456,6 @@
             } catch (err) {
                 console.error("Błąd kamery:", err);
                 document.getElementById('status-label').innerText = 'BRAK KAMERY';
-                document.getElementById('messenger-loader').style.display = 'none';
                 document.getElementById('model-status').innerText = 'Zezwól przeglądarce na dostęp do aparatu.';
             }
         }
@@ -505,14 +475,32 @@
                 await track.applyConstraints({
                     advanced: [{ torch: torchOn }]
                 });
-                const btn = document.getElementById('flashlight-btn');
-                if (torchOn) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
+                updateFlashlightUI();
             } catch (err) {
                 console.error("Nie udało się włączyć latarki:", err);
+            }
+        }
+
+        async function turnOffFlashlight() {
+            if (!mediaStream || !torchOn) return;
+            try {
+                const track = mediaStream.getVideoTracks()[0];
+                torchOn = false;
+                await track.applyConstraints({
+                    advanced: [{ torch: false }]
+                });
+                updateFlashlightUI();
+            } catch (err) {
+                console.error("Błąd wyłączania latarki:", err);
+            }
+        }
+
+        function updateFlashlightUI() {
+            const btn = document.getElementById('flashlight-btn');
+            if (torchOn) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
             }
         }
 
@@ -544,24 +532,18 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.45); 
+                    const detections = parseYOLOOutput(output, dims, 0.40); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    // Elastyczna stabilizacja: akceptujemy wykrycie, jeśli widzimy min. 3 paski ułożone w logicznej odległości
+                    // Czułe i pewne wykrywanie: wystarczą minimum 3 paski ułożone w kadrze
                     if (colorDetections.length >= 3) {
                         colorDetections.sort((a, b) => a.x - b.x);
                         const spanX = colorDetections[colorDetections.length - 1].x - colorDetections[0].x;
 
-                        if (spanX > 0.03 && spanX < 0.50) {
-                            if (colorDetections.length === lastBandsCount) {
-                                resistorStableCount++;
-                            } else {
-                                lastBandsCount = colorDetections.length;
-                                resistorStableCount = 1;
-                            }
-
-                            // Wystarczą 3 stabilne klatki w miejscu, aby błyskawicznie złapać i zamrozić odczyt
-                            if (resistorStableCount >= 3) {
+                        if (spanX > 0.02 && spanX < 0.60) {
+                            resistorStableCount++;
+                            // Błyskawiczne zamrożenie po 2 klatkach stabilności
+                            if (resistorStableCount >= 2) {
                                 handleResistorFound(colorDetections); 
                                 return;
                             }
@@ -574,7 +556,7 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 100); 
+            setTimeout(() => requestAnimationFrame(scanLoop), 80); 
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
@@ -672,8 +654,11 @@
             };
         }
 
-        function handleResistorFound(detections) {
+        async function handleResistorFound(detections) {
             isScanning = false;
+
+            // Automatyczne wyłączenie latarki w trybie sukcesu MAM!!!
+            await turnOffFlashlight();
 
             frozenCanvas.width = video.videoWidth;
             frozenCanvas.height = video.videoHeight;
@@ -685,7 +670,6 @@
 
             const statusLabel = document.getElementById('status-label');
             statusLabel.innerText = 'MAM!!!';
-            document.getElementById('messenger-loader').style.display = 'none';
             document.getElementById('status-text').classList.add('found');
 
             document.getElementById('reset-btn').style.display = 'block';
@@ -724,7 +708,6 @@
             video.style.display = 'block';
             document.getElementById('info-card').style.display = 'none';
             resistorStableCount = 0;
-            lastBandsCount = 0;
             setSearchingUI();
             isScanning = true;
             scanLoop();
@@ -732,26 +715,3 @@
 
         function setSearchingUI() {
             const statusLabel = document.getElementById('status-label');
-            statusLabel.innerText = 'SZUKAM';
-            document.getElementById('messenger-loader').style.display = 'inline-flex';
-            document.getElementById('status-text').classList.remove('found');
-
-            document.getElementById('reset-btn').style.display = 'none';
-            document.getElementById('camera-box').classList.remove('found');
-
-            const cat = document.getElementById('cat-wrapper');
-            cat.classList.remove('found');
-            cat.classList.add('searching');
-
-            document.getElementById('eyebrows-searching').style.display = 'block';
-            document.getElementById('eyebrows-found').style.display = 'none';
-            document.getElementById('eyes-searching').style.display = 'block';
-            document.getElementById('eyes-found').style.display = 'none';
-            document.getElementById('mouth-searching').style.display = 'block';
-            document.getElementById('mouth-found').style.display = 'none';
-        }
-
-        initApp();
-    </script>
-</body>
-</html>
