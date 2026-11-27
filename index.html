@@ -192,7 +192,7 @@
         }
 
         #status-text {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 900;
             letter-spacing: 1px;
             color: var(--accent-yellow);
@@ -331,9 +331,9 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3>Jak skanować rezystory?</h3>
             <ul>
-                <li><strong>Tryb AUTO:</strong> Przytrzymaj rezystor w kadrze przez 2 sekundy – pasek odliczy czas i sam wykona pomiar.</li>
+                <li><strong>Tryb AUTO:</strong> Przytrzymaj rezystor w kadrze – pasek odliczy 1.5 sekundy i sam wykona pomiar.</li>
                 <li><strong>Tryb MANUAL:</strong> Wykadruj rezystor i kliknij zielony przycisk migawki na dole.</li>
-                <li><strong>Oświetlenie:</strong> Włącz latarkę przyciskiem na górze.</li>
+                <li><strong>Oświetlenie:</strong> Włącz latarkę przyciskiem na górze, jeśli jest ciemno.</li>
             </ul>
             <button class="close-btn" onclick="toggleModal()">Rozumiem</button>
         </div>
@@ -354,7 +354,7 @@
         </h1>
         
         <div class="mode-selector">
-            <button id="btn-auto" class="mode-btn active" onclick="setMode('auto')">Auto (2s)</button>
+            <button id="btn-auto" class="mode-btn active" onclick="setMode('auto')">Auto (1.5s)</button>
             <button id="btn-manual" class="mode-btn" onclick="setMode('manual')">Manual</button>
         </div>
     </header>
@@ -594,7 +594,7 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.28); 
+                    const detections = parseYOLOv8Output(output, dims, 0.30); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
                     
                     latestDetections = colorDetections;
@@ -607,10 +607,10 @@
                                 autoHoldStartTime = Date.now();
                             } else {
                                 const elapsed = Date.now() - autoHoldStartTime;
-                                const timeLeft = Math.max(0, ((2000 - elapsed) / 1000)).toFixed(1);
+                                const timeLeft = Math.max(0, ((1500 - elapsed) / 1000)).toFixed(1);
                                 document.getElementById('status-label').innerText = `TRZYMAJ (${timeLeft}s)`;
 
-                                if (elapsed >= 2000) {
+                                if (elapsed >= 1500) {
                                     await handleResistorFound(colorDetections);
                                     return;
                                 }
@@ -625,12 +625,13 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 200);
+            setTimeout(() => requestAnimationFrame(scanLoop), 150);
         }
 
-        function parseYOLOOutput(data, dims, confThreshold) {
-            const numFeatures = dims[1];
-            const numAnchors = dims[2];
+        // Prawidłowy parser YOLOv8 obsługujący macierz [1, num_classes + 4, num_anchors]
+        function parseYOLOv8Output(data, dims, confThreshold) {
+            const numFeatures = dims[1]; // np. 16 (4 współrzędne + 12 klas)
+            const numAnchors = dims[2];  // np. 2100
             const numClasses = numFeatures - 4;
             let found = [];
 
@@ -648,13 +649,22 @@
 
                 if (maxScore > confThreshold) {
                     const label = CLASS_NAMES[classId] || `Klasa #${classId}`;
-                    const xCenter = data[i]; 
-                    if (!found.some(item => item.label === label)) {
+                    const xCenter = data[0 * numAnchors + i]; // współrzędna X środka bounding boxa w normalizacji 0-320
+                    
+                    // Sprawdzamy czy to duplikat blisko tego samego punktu
+                    const existingIndex = found.findIndex(item => Math.abs(item.x - xCenter) < 15);
+                    if (existingIndex === -1) {
                         found.push({
                             label: label,
                             confidence: Math.round(maxScore * 100),
                             x: xCenter
                         });
+                    } else if (found[existingIndex].confidence < Math.round(maxScore * 100)) {
+                        found[existingIndex] = {
+                            label: label,
+                            confidence: Math.round(maxScore * 100),
+                            x: xCenter
+                        };
                     }
                 }
             }
@@ -666,7 +676,10 @@
             
             let detectionsToUse = latestDetections;
             if (detectionsToUse.length < 3) {
-                alert("Nie wykryto wyraźnych pasków rezystora! Skieruj kamerę bezpośrednio na elementy i spróbuj ponownie.");
+                document.getElementById('status-label').innerText = 'ZA MAŁO PASKÓW!';
+                setTimeout(() => {
+                    if (currentMode === 'manual') document.getElementById('status-label').innerText = 'MANUAL';
+                }, 1500);
                 return;
             }
             
