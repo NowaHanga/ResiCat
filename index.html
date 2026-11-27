@@ -29,6 +29,94 @@
             min-height: 100vh;
         }
 
+        /* Przycisk informacji "i" w kółku w prawym górnym rogu */
+        #info-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--accent-blue);
+            border-radius: 50%;
+            color: var(--accent-blue);
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.2s;
+        }
+
+        #info-btn:hover {
+            background-color: rgba(64, 196, 255, 0.2);
+            box-shadow: 0 0 10px rgba(64, 196, 255, 0.4);
+        }
+
+        /* Modal z instrukcją */
+        #info-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            padding: 25px;
+            border-radius: 16px;
+            max-width: 340px;
+            width: 90%;
+            border: 2px solid #33334d;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+            text-align: left;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            color: var(--accent-mint);
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+
+        .modal-content ul {
+            padding-left: 20px;
+            line-height: 1.6;
+            color: var(--text-main);
+            font-size: 14px;
+        }
+
+        .modal-content li {
+            margin-bottom: 8px;
+        }
+
+        .close-btn {
+            background-color: var(--accent-mint);
+            color: #161622;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 800;
+            font-size: 14px;
+            margin-top: 15px;
+            text-transform: uppercase;
+            transition: transform 0.1s;
+        }
+
+        .close-btn:active {
+            transform: scale(0.97);
+        }
+
         .app-header {
             display: flex;
             flex-direction: column;
@@ -144,7 +232,6 @@
             margin: 0px auto 5px auto;
         }
 
-        /* Lekkie, płynne i stabilne animacje zoptymalizowane pod mobilne przeglądarki */
         @keyframes softTwitchLeft {
             0%, 100% { transform: rotate(0deg); }
             50% { transform: rotate(-6deg) translateY(-1px); }
@@ -259,6 +346,22 @@
 </head>
 <body>
 
+    <!-- Przycisk "i" w kółku -->
+    <div id="info-btn" onclick="toggleModal()" title="Instrukcja">i</div>
+
+    <!-- Okienko informacyjne (Modal) -->
+    <div id="info-modal" onclick="toggleModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3>Jak skanować rezystory?</h3>
+            <ul>
+                <li><strong>Oświetlenie:</strong> Zapewnij dobre światło. Jeśli jest ciemno, <strong>włącz latarkę</strong> przyciskiem powyżej.</li>
+                <li><strong>Pojedynczy element:</strong> W kadrze musi znajdować się <strong>tylko 1 rezystor</strong> (unikaj wielu wymieszanych elementów obok siebie).</li>
+                <li><strong>Czyste tło:</strong> Umieść rezystor na gładkim, jednolitym tle (np. czysta kartka papieru lub blat), aby model łatwiej wykrył paski.</li>
+            </ul>
+            <button class="close-btn" onclick="toggleModal()">Rozumiem</button>
+        </div>
+    </div>
+
     <header class="app-header">
         <h1 class="app-title">
             RES<span class="letter-i-container">
@@ -359,9 +462,7 @@
 
     <script>
         const CLASS_NAMES = [
-            "Czarny", "Brązowy", "Czerwony", "Pomarańczowy", 
-            "Żółty", "Zielony", "Niebieski", "Fioletowy", 
-            "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
+            "1", "10", "100", "1k", "2.2k", "4.7k", "10k", "22k", "47k", "100k", "220k", "1M"
         ];
 
         const COLOR_VALUES = {
@@ -389,6 +490,11 @@
         const frozenCanvas = document.getElementById('frozen-frame');
         const aiCanvas = document.getElementById('ai-canvas');
         const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
+
+        function toggleModal() {
+            const modal = document.getElementById('info-modal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        }
 
         async function initApp() {
             await startCamera();
@@ -498,15 +604,11 @@
                     const dims = results[session.outputNames[0]].dims;
 
                     const detections = parseYOLOOutput(output, dims, 0.35); 
-                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    // Szybkie i czułe wykrywanie pasków
-                    if (colorDetections.length >= 3) {
-                        colorDetections.sort((a, b) => a.x - b.x);
+                    if (detections.length > 0) {
                         resistorStableCount++;
-                        // Natychmiastowe zatrzymanie i odczyt po zaledwie 2 stabilnych klatkach w kadrze
                         if (resistorStableCount >= 2) {
-                            handleResistorFound(colorDetections); 
+                            handleResistorFound(detections); 
                             return;
                         }
                     } else {
@@ -553,72 +655,9 @@
             return found;
         }
 
-        function calculateResistor(bands) {
-            bands.sort((a, b) => a.x - b.x);
-
-            const firstLabel = bands[0].label;
-            if (bands.length > 2 && (firstLabel === "Złoty" || firstLabel === "Srebrny")) {
-                bands.reverse();
-            }
-
-            let ohms = 0;
-            let tolerance = "±5%";
-            let tempCoeff = null;
-
-            if (bands.length >= 4) {
-                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
-                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
-                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                ohms = (d1 * 10 + d2) * mult;
-
-                const tolColor = bands[3].label;
-                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
-                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
-                }
-
-                if (bands.length >= 5) {
-                    const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
-                    const mult5 = COLOR_VALUES[bands[3].label]?.mult ?? 1;
-                    ohms = (d1 * 100 + d2 * 10 + d3) * mult5;
-                    const tolColor5 = bands[4].label;
-                    if (COLOR_VALUES[tolColor5]?.tol !== undefined) {
-                        tolerance = `±${COLOR_VALUES[tolColor5].tol}%`;
-                    }
-                }
-
-                if (bands.length >= 6) {
-                    const tcColor = bands[5].label;
-                    if (COLOR_VALUES[tcColor]?.tempCoeff) {
-                        tempCoeff = `${COLOR_VALUES[tcColor].tempCoeff} ppm/°C`;
-                    }
-                }
-            } else if (bands.length === 3) {
-                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
-                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
-                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                ohms = (d1 * 10 + d2) * mult;
-                tolerance = "±20%";
-            }
-
-            let formattedResistance = ohms + " Ω";
-            if (ohms >= 1000000) {
-                formattedResistance = (ohms / 1000000).toFixed(1).replace('.0', '') + " MΩ";
-            } else if (ohms >= 1000) {
-                formattedResistance = (ohms / 1000).toFixed(1).replace('.0', '') + " kΩ";
-            }
-
-            return {
-                resistance: formattedResistance,
-                tolerance: tolerance,
-                tempCoeff: tempCoeff,
-                orderedBands: bands
-            };
-        }
-
         async function handleResistorFound(detections) {
             isScanning = false;
 
-            // Automatyczne wyłączenie latarki w trybie sukcesu MAM!!!
             await turnOffFlashlight();
 
             frozenCanvas.width = video.videoWidth;
@@ -647,18 +686,14 @@
             document.getElementById('mouth-searching').style.display = 'none';
             document.getElementById('mouth-found').style.display = 'block';
 
-            const result = calculateResistor(detections);
+            // Pobieramy wykrytą klasę rezystora
+            const detectedItem = detections.reduce((prev, current) => (prev.confidence > current.confidence) ? prev : current);
 
             const infoCard = document.getElementById('info-card');
             const infoContent = document.getElementById('info-content');
             
-            let html = `<div class="info-row">Wartość: <span>${result.resistance}</span></div>`;
-            html += `<div class="info-row">Tolerancja: <span>${result.tolerance}</span></div>`;
-            if (result.tempCoeff) {
-                html += `<div class="info-row">Współczynnik TK: <span>${result.tempCoeff}</span></div>`;
-            }
-            html += `<hr style="border: 0; border-top: 1px solid #33334d; margin: 8px 0;">`;
-            html += `<div class="info-row" style="font-size: 13px; color: var(--text-muted);">Paski: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
+            let html = `<div class="info-row">Wartość rezystora: <span>${detectedItem.label}</span></div>`;
+            html += `<div class="info-row">Pewność modelu: <span>${detectedItem.confidence}%</span></div>`;
             
             infoContent.innerHTML = html;
             infoCard.style.display = 'block';
