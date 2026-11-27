@@ -144,7 +144,6 @@
             margin: 0px auto 5px auto;
         }
 
-        /* Lekkie, płynne i stabilne animacje zoptymalizowane pod mobilne przeglądarki */
         @keyframes softTwitchLeft {
             0%, 100% { transform: rotate(0deg); }
             50% { transform: rotate(-6deg) translateY(-1px); }
@@ -497,19 +496,23 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.35); 
+                    const detections = parseYOLOOutput(output, dims, 0.40); 
+                    
+                    // Krok 1: Sprawdzamy czy model widzi główną klasę "Rezystor"
+                    const hasResistorObject = detections.some(d => d.label === "Rezystor");
+                    // Krok 2: Pobieramy wykryte paski kolorów
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    // Szybkie i czułe wykrywanie pasków
-                    if (colorDetections.length >= 3) {
-                        colorDetections.sort((a, b) => a.x - b.x);
+                    // Wymóg: AI musi widzieć bryłę rezystora ORAZ minimum 3 paski kolorów w kadrze
+                    if (hasResistorObject && colorDetections.length >= 3) {
                         resistorStableCount++;
-                        // Natychmiastowe zatrzymanie i odczyt po zaledwie 2 stabilnych klatkach w kadrze
-                        if (resistorStableCount >= 2) {
+                        // Trzeba utrzymać w bezruchu przez ok. 3-4 klatki, żeby wyzwolić odczyt i zamrozić kadr
+                        if (resistorStableCount >= 3) {
                             handleResistorFound(colorDetections); 
                             return;
                         }
                     } else {
+                        // Szybkie resetowanie licznika, jeśli rezystor zniknie z kadru lub obraz się rozmyje
                         resistorStableCount = Math.max(0, resistorStableCount - 1);
                     }
                 } catch (err) {
@@ -517,7 +520,7 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 60); 
+            setTimeout(() => requestAnimationFrame(scanLoop), 80); 
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
