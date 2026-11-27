@@ -665,13 +665,13 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.30); 
-                    // Filtrujemy niepotrzebne i odrzucamy fałszywie wykryty "Biały", jeśli pewność jest niska
-                    const colorDetections = detections.filter(d => d.label !== "Rezystor" && !(d.label === "Biały" && d.confidence < 50));
+                    const detections = parseYOLOOutput(output, dims, 0.28); 
+                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
                     
                     latestDetections = colorDetections;
 
                     if (currentMode === 'auto') {
+                        // W trybie auto akceptujemy od 3 pasków w górę
                         if (colorDetections.length >= 3) {
                             colorDetections.sort((a, b) => a.x - b.x);
                             resistorStableCount++;
@@ -730,9 +730,10 @@
             let detectionsToUse = latestDetections;
             if (detectionsToUse.length === 0) {
                 detectionsToUse = [
-                    { label: "Brązowy", confidence: 85, x: 0.2 }, 
-                    { label: "Czarny", confidence: 85, x: 0.5 }, 
-                    { label: "Czerwony", confidence: 85, x: 0.8 }
+                    { label: "Brązowy", confidence: 85, x: 0.1 }, 
+                    { label: "Czarny", confidence: 85, x: 0.4 }, 
+                    { label: "Czerwony", confidence: 85, x: 0.7 },
+                    { label: "Złoty", confidence: 85, x: 0.9 }
                 ];
             }
             
@@ -742,8 +743,10 @@
         function calculateResistor(bands) {
             bands.sort((a, b) => a.x - b.x);
 
+            // Poprawna orientacja rezystora (jeśli na końcu jest złoty/srebrny pas tolerancji)
+            const lastLabel = bands[bands.length - 1].label;
             const firstLabel = bands[0].label;
-            if (bands.length > 2 && (firstLabel === "Złoty" || firstLabel === "Srebrny")) {
+            if ((firstLabel === "Złoty" || firstLabel === "Srebrny") && lastLabel !== "Złoty" && lastLabel !== "Srebrny") {
                 bands.reverse();
             }
 
@@ -758,6 +761,7 @@
                 const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
                 ohms = (d1 * 10 + d2) * mult;
 
+                // Czwarty pasek to tolerancja (np. Złoty = ±5%, Srebrny = ±10% lub inne kolory)
                 const tolColor = bands[3].label;
                 if (COLOR_VALUES[tolColor]?.tol !== undefined) {
                     tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
@@ -806,7 +810,7 @@
         async function handleResistorFound(detections) {
             isScanning = false;
 
-            // Automatyczne wyłączenie latarki po znalezieniu/zrobieniu zdjęcia
+            // Wyłączenie latarki po znalezieniu/zrobieniu zdjęcia w obu trybach
             await turnOffFlashlight();
 
             frozenCanvas.width = video.videoWidth;
