@@ -91,6 +91,12 @@
             margin-top: 15px;
         }
 
+        /* Nagłówek i animacja */
+        h2 {
+            margin: 10px 0;
+            letter-spacing: 1px;
+        }
+
         /* Główny kontener aplikacji */
         #app-container {
             position: relative;
@@ -116,6 +122,7 @@
             margin-top: 15px;
             font-size: 16px;
             color: #bbb;
+            text-align: center;
         }
     </style>
 </head>
@@ -137,14 +144,14 @@
         </div>
     </div>
 
-    <h2>ResiCat - Skaner Rezystorów</h2>
+    <h2>🐱 ResiCat - Skaner Rezystorów</h2>
     
     <div id="app-container">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
     </div>
     
-    <div id="status">Ładowanie modelu ONNX...</div>
+    <div id="status">Inicjalizowanie kamery...</div>
 
     <script>
         const video = document.getElementById('video');
@@ -153,71 +160,84 @@
         const statusDiv = document.getElementById('status');
 
         let ortSession = null;
+        let isProcessing = false;
 
-        // Obsługa modala z instrukcją
+        // Lista Twoich klas (dostosuj kolejność, jeśli w Roboflow była inna)
+        const CLASS_NAMES = [
+            "1", "10", "100", "1k", "2.2k", "4.7k", "10k", "22k", "47k", "100k", "220k", "1M"
+        ];
+
         function toggleModal() {
             const modal = document.getElementById('info-modal');
             modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
         }
 
-        // Uruchomienie kamery
+        // Uruchomienie kamery bez klatkowania
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: 640, height: 640 },
+                    video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
                     audio: false
                 });
                 video.srcObject = stream;
                 return new Promise((resolve) => {
-                    video.onloadedmetadata = () => { resolve(video); };
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve(video);
+                    };
                 });
             } catch (err) {
-                statusDiv.innerText = "Błąd dostępu do kamery: " + err.message;
+                statusDiv.innerText = "Błąd kamery: " + err.message;
             }
         }
 
-        // Ładowanie modelu ONNX
+        // Ładowanie modelu
         async function loadModel() {
             try {
+                statusDiv.innerText = "Ładowanie modelu ONNX...";
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
                 ortSession = await ort.InferenceSession.create('./best.onnx', { executionProviders: ['wasm'] });
-                statusDiv.innerText = "Model gotowy do skanowania!";
-                detectFrame();
+                statusDiv.innerText = "Model gotowy! Skieruj kamerę na rezystor.";
+                requestAnimationFrame(detectFrame);
             } catch (e) {
-                statusDiv.innerText = "Błąd ładowania model.onnx: " + e.message;
-                console.log(e);
+                statusDiv.innerText = "Błąd ładowania best.onnx: " + e.message;
+                console.error(e);
             }
         }
 
-        // Główna pętla detekcji
+        // Pętla detekcji zapobiegająca lagowaniu
         async function detectFrame() {
             if (!ortSession) return;
 
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                
+            if (video.readyState === video.HAVE_ENOUGH_DATA && !isProcessing) {
+                isProcessing = true;
+
+                if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                }
+
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Przetwarzanie obrazu pod YOLO (320x320)
-                const tensor = preprocess(canvas, 320, 320);
-                
                 try {
+                    // Przygotowanie obrazu 320x320 do modelu YOLO
+                    const tensor = preprocess(canvas, 320, 320);
                     const feeds = { images: tensor };
                     const results = await ortSession.run(feeds);
                     const output = results[Object.keys(results)[0]].data;
-                    
-                    // Rysowanie wyników detekcji na ekranie
-                    renderBoxes(output, canvas.width, canvas.height);
+
+                    // Rysowanie wykrytych obiektów
+                    renderBoxes(output, canvas.width, canvas.height, 320, 320);
                 } catch (err) {
                     console.error("Błąd inferencji:", err);
                 }
+
+                isProcessing = false;
             }
 
             requestAnimationFrame(detectFrame);
         }
 
-        // Przygotowanie tensora wejściowego do modelu
         function preprocess(sourceCanvas, targetWidth, targetHeight) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = targetWidth;
@@ -246,12 +266,70 @@
             return new ort.Tensor('float32', input, [1, 3, targetHeight, targetWidth]);
         }
 
-        // Rysowanie wykrytych obiektów (ramek)
-        function renderBoxes(output, imgWidth, imgHeight) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(video, 0, 0, imgWidth, imgHeight);
+        // Rysowanie ramek i podpisów na płótnie
+        function renderBoxes(output, origWidth, origHeight, modelWidth, modelHeight) {
+            // output ma zazwyczaj kształt [1, 4 + num_classes, 8400]
+            const numClasses = CLASS_NAMES.length;
+            const numRows = 8400; // standard dla YOLOv8 przy 320x320
 
-            // Tutaj możesz dodać parsowanie tensorów wyjściowych YOLOv8 i rysowanie ramek prostokątnych na `ctx`
+            const xRatio = origWidth / modelWidth;
+            const yRatio = origHeight / modelHeight;
+
+            const boxes = [];
+
+            for (let i = 0; i < numRows; i++) {
+                let maxClassScore = 0;
+                let bestClassId = -1;
+
+                // Szukanie najwyższego prawdopodobieństwa klasy dla danego boxa
+                for (let c = 0; c < numClasses; c++) {
+                    const score = output[(4 + c) * numRows + i];
+                    if (score > maxClassScore) {
+                        maxClassScore = score;
+                        bestClassId = c;
+                    }
+                }
+
+                // Próg pewności (confidence threshold) np. 45%
+                if (maxClassScore > 0.45) {
+                    const xc = output[0 * numRows + i] * xRatio;
+                    const yc = output[1 * numRows + i] * yRatio;
+                    const w = output[2 * numRows + i] * xRatio;
+                    const h = output[3 * numRows + i] * yRatio;
+
+                    const x1 = xc - w / 2;
+                    const y1 = yc - h / 2;
+
+                    boxes.push({
+                        box: [x1, y1, w, h],
+                        score: maxClassScore,
+                        classId: bestClassId
+                    });
+                }
+            }
+
+            // Rysowanie ramek na ekranie
+            boxes.forEach(item => {
+                const [x, y, w, h] = item.box;
+                const className = CLASS_NAMES[item.classId] || "Rezystor";
+                const scorePercent = Math.round(item.score * 100);
+
+                // Styl ramki
+                ctx.strokeStyle = "#4CAF50";
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, w, h);
+
+                // Tło pod napis
+                ctx.fillStyle = "#4CAF50";
+                const text = `${className} (${scorePercent}%)`;
+                const textWidth = ctx.measureText(text).width;
+                ctx.fillRect(x, y > 25 ? y - 25 : 0, textWidth + 10, 25);
+
+                // Tekst etykiety
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "16px Arial";
+                ctx.fillText(text, x + 5, y > 25 ? y - 7 : 18);
+            });
         }
 
         // Start aplikacji
