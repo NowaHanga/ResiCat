@@ -402,7 +402,7 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3>Jak skanować rezystory?</h3>
             <ul>
-                <li><strong>Tryb AUTO/MANUAL:</strong> Na górze przełączasz tryb. W trybie AUTO model sam wykrywa paski, w MANUALie robisz zdjęcie przyciskiem na dole.</li>
+                <li><strong>Tryb AUTO/MANUAL:</strong> W trybie AUTO model sam wykrywa paski, w MANUALie robisz zdjęcie przyciskiem na dole.</li>
                 <li><strong>Oświetlenie:</strong> Zapewnij dobre światło. Jeśli jest ciemno, <strong>włącz latarkę</strong>.</li>
                 <li><strong>Pojedynczy element:</strong> W kadrze musi znajdować się <strong>tylko 1 rezystor</strong>.</li>
             </ul>
@@ -562,15 +562,7 @@
             currentMode = mode;
             document.getElementById('btn-auto').classList.toggle('active', mode === 'auto');
             document.getElementById('btn-manual').classList.toggle('active', mode === 'manual');
-
-            const shutterContainer = document.getElementById('manual-shutter-container');
-            if (mode === 'manual') {
-                shutterContainer.style.display = 'flex';
-                document.getElementById('status-label').innerText = 'MANUAL';
-            } else {
-                shutterContainer.style.display = 'none';
-                document.getElementById('status-label').innerText = 'SZUKAM...';
-            }
+            setSearchingUI();
         }
 
         async function initApp() {
@@ -627,6 +619,20 @@
             }
         }
 
+        async function turnOffFlashlight() {
+            if (!mediaStream || !torchOn) return;
+            try {
+                const track = mediaStream.getVideoTracks()[0];
+                torchOn = false;
+                await track.applyConstraints({
+                    advanced: [{ torch: false }]
+                });
+                updateFlashlightUI();
+            } catch (err) {
+                console.error("Błąd wyłączania latarki:", err);
+            }
+        }
+
         function updateFlashlightUI() {
             const btn = document.getElementById('flashlight-btn');
             if (torchOn) {
@@ -659,8 +665,9 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.35); 
-                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
+                    const detections = parseYOLOOutput(output, dims, 0.30); 
+                    // Filtrujemy niepotrzebne i odrzucamy fałszywie wykryty "Biały", jeśli pewność jest niska
+                    const colorDetections = detections.filter(d => d.label !== "Rezystor" && !(d.label === "Biały" && d.confidence < 50));
                     
                     latestDetections = colorDetections;
 
@@ -669,7 +676,7 @@
                             colorDetections.sort((a, b) => a.x - b.x);
                             resistorStableCount++;
                             if (resistorStableCount >= 2) {
-                                handleResistorFound(colorDetections); 
+                                await handleResistorFound(colorDetections); 
                                 return;
                             }
                         } else {
@@ -717,7 +724,7 @@
             return found;
         }
 
-        function takeManualPhoto() {
+        async function takeManualPhoto() {
             if (!isScanning) return;
             
             let detectionsToUse = latestDetections;
@@ -729,7 +736,7 @@
                 ];
             }
             
-            handleResistorFound(detectionsToUse);
+            await handleResistorFound(detectionsToUse);
         }
 
         function calculateResistor(bands) {
@@ -798,6 +805,9 @@
 
         async function handleResistorFound(detections) {
             isScanning = false;
+
+            // Automatyczne wyłączenie latarki po znalezieniu/zrobieniu zdjęcia
+            await turnOffFlashlight();
 
             frozenCanvas.width = video.videoWidth;
             frozenCanvas.height = video.videoHeight;
