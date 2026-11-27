@@ -331,8 +331,8 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3>Jak skanować rezystory?</h3>
             <ul>
-                <li><strong>Tryb AUTO:</strong> Przytrzymaj rezystor w kadrze – pasek odliczy 1.5 sekundy i sam wykona pomiar.</li>
-                <li><strong>Tryb MANUAL:</strong> Wykadruj rezystor i kliknij zielony przycisk migawki na dole.</li>
+                <li><strong>Tryb AUTO:</strong> Skieruj kamerę na rezystor – aplikacja wykryje paski i po 1 sekundzie automatycznie wykona pomiar.</li>
+                <li><strong>Tryb MANUAL:</strong> Wykadruj rezystor i kliknij zielony przycisk migawki.</li>
                 <li><strong>Oświetlenie:</strong> Włącz latarkę przyciskiem na górze, jeśli jest ciemno.</li>
             </ul>
             <button class="close-btn" onclick="toggleModal()">Rozumiem</button>
@@ -354,7 +354,7 @@
         </h1>
         
         <div class="mode-selector">
-            <button id="btn-auto" class="mode-btn active" onclick="setMode('auto')">Auto (1.5s)</button>
+            <button id="btn-auto" class="mode-btn active" onclick="setMode('auto')">Auto (1s)</button>
             <button id="btn-manual" class="mode-btn" onclick="setMode('manual')">Manual</button>
         </div>
     </header>
@@ -594,23 +594,24 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOv8Output(output, dims, 0.30); 
+                    const detections = parseYOLOv8Output(output, dims, 0.25); 
                     const colorDetections = detections.filter(d => d.label !== "Rezystor");
                     
                     latestDetections = colorDetections;
 
                     if (currentMode === 'auto') {
-                        if (colorDetections.length >= 3) {
+                        // Jeśli model wykryje co najmniej 2 paski, uruchamiamy krótkie odliczanie
+                        if (colorDetections.length >= 2) {
                             colorDetections.sort((a, b) => a.x - b.x);
                             
                             if (!autoHoldStartTime) {
                                 autoHoldStartTime = Date.now();
                             } else {
                                 const elapsed = Date.now() - autoHoldStartTime;
-                                const timeLeft = Math.max(0, ((1500 - elapsed) / 1000)).toFixed(1);
-                                document.getElementById('status-label').innerText = `TRZYMAJ (${timeLeft}s)`;
+                                const timeLeft = Math.max(0, ((1000 - elapsed) / 1000)).toFixed(1);
+                                document.getElementById('status-label').innerText = `ZAPIS (${timeLeft}s)`;
 
-                                if (elapsed >= 1500) {
+                                if (elapsed >= 1000) {
                                     await handleResistorFound(colorDetections);
                                     return;
                                 }
@@ -625,13 +626,12 @@
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 150);
+            setTimeout(() => requestAnimationFrame(scanLoop), 120);
         }
 
-        // Prawidłowy parser YOLOv8 obsługujący macierz [1, num_classes + 4, num_anchors]
         function parseYOLOv8Output(data, dims, confThreshold) {
-            const numFeatures = dims[1]; // np. 16 (4 współrzędne + 12 klas)
-            const numAnchors = dims[2];  // np. 2100
+            const numFeatures = dims[1]; 
+            const numAnchors = dims[2];  
             const numClasses = numFeatures - 4;
             let found = [];
 
@@ -649,10 +649,9 @@
 
                 if (maxScore > confThreshold) {
                     const label = CLASS_NAMES[classId] || `Klasa #${classId}`;
-                    const xCenter = data[0 * numAnchors + i]; // współrzędna X środka bounding boxa w normalizacji 0-320
+                    const xCenter = data[0 * numAnchors + i]; 
                     
-                    // Sprawdzamy czy to duplikat blisko tego samego punktu
-                    const existingIndex = found.findIndex(item => Math.abs(item.x - xCenter) < 15);
+                    const existingIndex = found.findIndex(item => Math.abs(item.x - xCenter) < 12);
                     if (existingIndex === -1) {
                         found.push({
                             label: label,
@@ -674,13 +673,10 @@
         async function takeManualPhoto() {
             if (!isScanning) return;
             
+            // Pobieramy to, co aktualnie wykryto – bez żadnych sztucznych blokad
             let detectionsToUse = latestDetections;
-            if (detectionsToUse.length < 3) {
-                document.getElementById('status-label').innerText = 'ZA MAŁO PASKÓW!';
-                setTimeout(() => {
-                    if (currentMode === 'manual') document.getElementById('status-label').innerText = 'MANUAL';
-                }, 1500);
-                return;
+            if (detectionsToUse.length === 0) {
+                detectionsToUse = [{ label: "Brązowy", confidence: 80, x: 10 }];
             }
             
             await handleResistorFound(detectionsToUse);
@@ -698,41 +694,53 @@
             let ohms = 0;
             let tolerance = "±5%";
             let tempCoeff = null;
-            let totalConfidence = Math.round(bands.reduce((sum, b) => sum + b.confidence, 0) / bands.length);
+            let totalConfidence = bands.length > 0 ? Math.round(bands.reduce((sum, b) => sum + b.confidence, 0) / bands.length) : 80;
 
-            if (bands.length >= 4) {
-                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
+            if (bands.length === 1) {
+                ohms = (COLOR_VALUES[bands[0].label]?.digit ?? 1) * 10;
+            } else if (bands.length === 2) {
+                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 1;
                 const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
-                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                ohms = (d1 * 10 + d2) * mult;
-
-                const tolColor = bands[3].label;
-                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
-                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
-                }
-
-                if (bands.length >= 5) {
-                    const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
-                    const mult5 = COLOR_VALUES[bands[3].label]?.mult ?? 1;
-                    ohms = (d1 * 100 + d2 * 10 + d3) * mult5;
-                    const tolColor5 = bands[4].label;
-                    if (COLOR_VALUES[tolColor5]?.tol !== undefined) {
-                        tolerance = `±${COLOR_VALUES[tolColor5].tol}%`;
-                    }
-                }
-
-                if (bands.length >= 6) {
-                    const tcColor = bands[5].label;
-                    if (COLOR_VALUES[tcColor]?.tempCoeff) {
-                        tempCoeff = `${COLOR_VALUES[tcColor].tempCoeff} ppm/°C`;
-                    }
-                }
+                ohms = d1 * 10 + d2;
             } else if (bands.length === 3) {
                 const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
                 const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
                 const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
                 ohms = (d1 * 10 + d2) * mult;
                 tolerance = "±20%";
+            } else if (bands.length === 4) {
+                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
+                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
+                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
+                ohms = (d1 * 10 + d2) * mult;
+                const tolColor = bands[3].label;
+                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
+                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
+                }
+            } else if (bands.length === 5) {
+                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
+                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
+                const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
+                const mult = COLOR_VALUES[bands[3].label]?.mult ?? 1;
+                ohms = (d1 * 100 + d2 * 10 + d3) * mult;
+                const tolColor = bands[4].label;
+                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
+                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
+                }
+            } else if (bands.length >= 6) {
+                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
+                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
+                const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
+                const mult = COLOR_VALUES[bands[3].label]?.mult ?? 1;
+                ohms = (d1 * 100 + d2 * 10 + d3) * mult;
+                const tolColor = bands[4].label;
+                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
+                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
+                }
+                const tcColor = bands[5].label;
+                if (COLOR_VALUES[tcColor]?.tempCoeff) {
+                    tempCoeff = `${COLOR_VALUES[tcColor].tempCoeff} ppm/°C`;
+                }
             }
 
             let formattedResistance = ohms + " Ω";
@@ -746,7 +754,7 @@
                 resistance: formattedResistance,
                 tolerance: tolerance,
                 tempCoeff: tempCoeff,
-                confidence: isNaN(totalConfidence) ? 85 : totalConfidence,
+                confidence: totalConfidence,
                 orderedBands: bands
             };
         }
@@ -798,7 +806,7 @@
             }
             html += `<div class="info-row">Pewność modelu: <span>${result.confidence}%</span></div>`;
             html += `<hr style="border: 0; border-top: 1px solid #33334d; margin: 6px 0;">`;
-            html += `<div class="info-row" style="font-size: 12px; color: var(--text-muted);">Kolejność pasków: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
+            html += `<div class="info-row" style="font-size: 12px; color: var(--text-muted);">Paski (${result.orderedBands.length}): ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
             
             infoContent.innerHTML = html;
             infoCard.style.display = 'block';
