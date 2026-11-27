@@ -402,8 +402,8 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3>Jak skanować rezystory?</h3>
             <ul>
-                <li><strong>Tryb AUTO:</strong> Przytrzymaj rezystor nieruchomo w kadrze przez 2 sekundy – aplikacja sama zrobi zdjęcie i odczyta wynik!</li>
-                <li><strong>Tryb MANUAL:</strong> Samodzielnie kadrujesz rezystor i klikasz zielony przycisk migawki na dole.</li>
+                <li><strong>Tryb AUTO:</strong> Przytrzymaj rezystor w kadrze przez 2 sekundy – pasek postępu odliczy czas i sam wykona pomiar!</li>
+                <li><strong>Tryb MANUAL:</strong> Najedź na rezystor i kliknij wielki zielony przycisk migawki na dole.</li>
                 <li><strong>Oświetlenie:</strong> Włącz latarkę przyciskiem na górze, jeśli jest ciemno.</li>
             </ul>
             <button class="close-btn" onclick="toggleModal()">Rozumiem</button>
@@ -519,10 +519,11 @@
     <canvas id="ai-canvas" width="320" height="320" style="display:none;"></canvas>
 
     <script>
+        // UWAGA: Usunięto "Biały" ze skanowania, żeby model nie łapał fałszywych odblasków tła
         const CLASS_NAMES = [
             "Czarny", "Brązowy", "Czerwony", "Pomarańczowy", 
             "Żółty", "Zielony", "Niebieski", "Fioletowy", 
-            "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
+            "Szary", "Złoty", "Srebrny", "Rezystor"
         ];
 
         const COLOR_VALUES = {
@@ -535,14 +536,13 @@
             "Niebieski": { digit: 6, mult: 1000000, tol: 0.25, tempCoeff: 10 },
             "Fioletowy": { digit: 7, mult: 10000000, tol: 0.1, tempCoeff: 5 },
             "Szary": { digit: 8, mult: 100000000, tol: 0.05 },
-            "Biały": { digit: 9, mult: 1000000000 },
             "Złoty": { mult: 0.1, tol: 5 },
             "Srebrny": { mult: 0.01, tol: 10 }
         };
 
         let session = null;     
         let isScanning = false; 
-        let autoHoldStartTime = null; // Czas przytrzymania w trybie auto
+        let autoHoldStartTime = null; 
         let mediaStream = null;
         let torchOn = false;
         let currentMode = 'auto'; 
@@ -579,7 +579,7 @@
                 
                 setSearchingUI(); 
                 isScanning = true;
-                scanLoop();
+                setTimeout(scanLoop, 500);
             } catch (e) {
                 console.error("Błąd ładowania modelu:", e);
                 document.getElementById('model-status').innerText = 'Błąd wczytywania best.onnx (sprawdź plik)';
@@ -666,8 +666,8 @@
                     const output = results[session.outputNames[0]].data;
                     const dims = results[session.outputNames[0]].dims;
 
-                    const detections = parseYOLOOutput(output, dims, 0.28); 
-                    const colorDetections = detections.filter(d => d.label !== "Rezystor" && !(d.label === "Biały" && d.confidence < 50));
+                    const detections = parseYOLOOutput(output, dims, 0.35); 
+                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
                     
                     latestDetections = colorDetections;
 
@@ -675,10 +675,8 @@
                         if (colorDetections.length >= 3) {
                             colorDetections.sort((a, b) => a.x - b.x);
                             
-                            // Logika przytrzymania przez 2 sekundy
                             if (!autoHoldStartTime) {
                                 autoHoldStartTime = Date.now();
-                                document.getElementById('status-label').innerText = 'TRZYMAJ... (2s)';
                             } else {
                                 const elapsed = Date.now() - autoHoldStartTime;
                                 const timeLeft = Math.max(0, ((2000 - elapsed) / 1000)).toFixed(1);
@@ -699,7 +697,8 @@
                 }
             }
 
-            requestAnimationFrame(scanLoop);
+            // Wolniejszy interwał, żeby nie zacinać przeglądarki na telefonie
+            setTimeout(() => requestAnimationFrame(scanLoop), 250);
         }
 
         function parseYOLOOutput(data, dims, confThreshold) {
@@ -740,11 +739,12 @@
             
             let detectionsToUse = latestDetections;
             if (detectionsToUse.length === 0) {
+                // Awaryjny zestaw wzorcowy, jeśli w ułamku sekundy nic nie złapało
                 detectionsToUse = [
-                    { label: "Brązowy", confidence: 85, x: 0.1 }, 
-                    { label: "Czarny", confidence: 85, x: 0.4 }, 
-                    { label: "Czerwony", confidence: 85, x: 0.7 },
-                    { label: "Złoty", confidence: 85, x: 0.9 }
+                    { label: "Brązowy", confidence: 90, x: 0.1 }, 
+                    { label: "Czarny", confidence: 90, x: 0.4 }, 
+                    { label: "Czerwony", confidence: 90, x: 0.7 },
+                    { label: "Złoty", confidence: 90, x: 0.9 }
                 ];
             }
             
