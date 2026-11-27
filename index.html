@@ -4,700 +4,263 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ResiCat - Skaner Rezystorów</title>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+    <!-- OnnxRuntime Web -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
-        :root {
-            --bg-color: #161622;
-            --card-bg: #222234;
-            --accent-blue: #40c4ff;
-            --accent-pink: #ff7eb3;
-            --accent-mint: #4ecca3;
-            --accent-yellow: #ffd369;
-            --text-main: #ffffff;
-            --text-muted: #a0a0b8;
-        }
-
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
             margin: 0;
-            padding: 20px 15px;
+            padding: 0;
+            background-color: #121212;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             min-height: 100vh;
         }
 
-        .app-header {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .app-title {
-            font-size: 44px;
-            font-weight: 900;
-            letter-spacing: 6px;
-            color: var(--text-main);
-            margin: 0;
-            text-transform: uppercase;
-            display: flex;
-            align-items: flex-end;
-            text-shadow: 0 2px 20px rgba(64, 196, 255, 0.4);
-        }
-
-        .letter-i-container {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            margin: 0 -2px;
-        }
-
-        .cat-paw-dot {
-            width: 24px;                  
-            height: 22px;                 
-            margin-bottom: 2px;           
-            transform: rotate(12deg);     
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        }
-
-        .controls-bar {
+        /* Przycisk informacji "i" w kółku */
+        #info-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            color: #ffffff;
+            font-size: 20px;
+            font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
-            margin-bottom: 5px;
-            min-height: 45px;
-            flex-wrap: wrap;
-            width: 100%;
-            max-width: 340px;
-        }
-
-        #flashlight-btn {
-            background: var(--card-bg);
-            border: 2px solid #33334d;
-            color: var(--text-muted);
-            border-radius: 12px;
-            padding: 8px 12px;
-            font-size: 13px;
-            font-weight: 700;
             cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s;
+            z-index: 100;
+            transition: background 0.3s;
         }
 
-        #flashlight-btn.active {
-            background: rgba(255, 211, 105, 0.15);
-            border-color: var(--accent-yellow);
-            color: var(--accent-yellow);
-            box-shadow: 0 0 10px rgba(255, 211, 105, 0.3);
+        #info-btn:hover {
+            background-color: rgba(255, 255, 255, 0.4);
         }
 
-        #status-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        #status-text {
-            font-size: 24px;
-            font-weight: 900;
-            letter-spacing: 2px;
-            color: var(--accent-yellow);
-            text-transform: uppercase;
-            margin: 0;
-            transition: color 0.3s;
-        }
-
-        #status-text.found {
-            color: var(--accent-mint);
-            text-shadow: 0 0 12px rgba(78, 204, 163, 0.4);
-        }
-
-        #reset-btn {
+        /* Modal z instrukcją */
+        #info-modal {
             display: none;
-            background: var(--accent-pink);
-            color: #161622;
-            border: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #1e1e1e;
+            padding: 25px;
             border-radius: 12px;
-            padding: 8px 14px;
-            font-size: 13px;
-            font-weight: 800;
+            max-width: 350px;
+            width: 90%;
+            border: 1px solid #333;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+
+        .modal-content ul {
+            padding-left: 20px;
+            line-height: 1.6;
+        }
+
+        .close-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(255, 126, 179, 0.4);
-            transition: transform 0.15s;
-            text-transform: uppercase;
+            width: 100%;
+            font-weight: bold;
+            margin-top: 15px;
         }
 
-        #reset-btn:active {
-            transform: scale(0.95);
-        }
-
-        .cat-container {
-            width: 240px;
-            height: 160px;
-            margin: 0px auto 5px auto;
-        }
-
-        @keyframes softTwitchLeft {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(-6deg) translateY(-1px); }
-        }
-
-        @keyframes softTwitchRight {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(6deg) translateY(-1px); }
-        }
-
-        .ear-left-group {
-            animation: softTwitchLeft 3s ease-in-out infinite;
-            transform-origin: 52px 38px;
-        }
-        .ear-right-group {
-            animation: softTwitchRight 3s ease-in-out infinite;
-            transform-origin: 178px 38px;
-        }
-
-        .found .ear-left-group {
-            animation: softTwitchLeft 1.2s ease-in-out infinite;
-            transform-origin: 52px 38px;
-        }
-        .found .ear-right-group {
-            animation: softTwitchRight 1.2s ease-in-out infinite;
-            transform-origin: 178px 38px;
-        }
-
-        .camera-label {
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 3px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-
-        .camera-box {
+        /* Główny kontener aplikacji */
+        #app-container {
             position: relative;
             width: 100%;
-            max-width: 340px;
-            aspect-ratio: 4 / 3;
-            background: #0d0d14;
-            border-radius: 18px;
-            border: 3px solid #33334d;
+            max-width: 640px;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-            transition: border-color 0.3s, box-shadow 0.3s;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
         }
 
-        .camera-box.found {
-            border-color: var(--accent-mint);
-            box-shadow: 0 0 20px rgba(78, 204, 163, 0.35);
-        }
-
-        video, #frozen-frame {
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block;
         }
 
-        #frozen-frame {
-            display: none;
-        }
-
-        #info-card {
-            display: none;
-            width: 100%;
-            max-width: 340px;
-            background: var(--card-bg);
-            border-left: 5px solid var(--accent-mint);
-            border-radius: 14px;
-            padding: 16px 18px;
+        #status {
             margin-top: 15px;
-            box-sizing: border-box;
-            text-align: left;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-            animation: slideUp 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .info-title {
             font-size: 16px;
-            font-weight: 800;
-            color: var(--accent-mint);
-            letter-spacing: 1.5px;
-            margin: 0 0 10px 0;
-        }
-
-        .info-row {
-            font-size: 15px;
-            margin: 6px 0;
-            color: var(--text-main);
-        }
-
-        .info-row span {
-            color: var(--accent-yellow);
-            font-weight: 700;
-        }
-
-        #model-status {
-            margin-top: 10px;
-            font-size: 12px;
-            color: var(--text-muted);
-            text-align: center;
+            color: #bbb;
         }
     </style>
 </head>
 <body>
 
-    <header class="app-header">
-        <h1 class="app-title">
-            RES<span class="letter-i-container">
-                <svg class="cat-paw-dot" viewBox="0 0 32 30" width="100%" height="100%">
-                    <path d="M 16 14 C 11 9, 6 12, 6 17 C 6 21, 11 25, 16 28 C 21 25, 26 21, 26 17 C 26 12, 21 9, 16 14 Z" fill="var(--accent-blue)"/>
-                    <circle cx="8" cy="8" r="3.5" fill="var(--accent-blue)"/>
-                    <circle cx="13" cy="5" r="3.5" fill="var(--accent-blue)"/>
-                    <circle cx="19" cy="5" r="3.5" fill="var(--accent-blue)"/>
-                    <circle cx="24" cy="8" r="3.5" fill="var(--accent-blue)"/>
-                </svg>
-                I
-            </span>CAT
-        </h1>
-    </header>
+    <!-- Przycisk "i" w kółku -->
+    <div id="info-btn" onclick="toggleModal()">i</div>
 
-    <div class="controls-bar">
-        <button id="flashlight-btn" onclick="toggleFlashlight()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path>
-            </svg>
-            Latarka
-        </button>
-        <div id="status-container">
-            <h1 id="status-text">
-                <span id="status-label">ŁADOWANIE...</span>
-            </h1>
-            <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
+    <!-- Okienko informacyjne (Modal) -->
+    <div id="info-modal" onclick="toggleModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3>Jak skanować rezystory?</h3>
+            <ul>
+                <li><strong>Oświetlenie:</strong> Zapewnij dobre światło. Jeśli jest ciemno, <strong>włącz latarkę</strong> w telefonie.</li>
+                <li><strong>Pojedynczy element:</strong> W kadrze musi znajdować się <strong>tylko 1 rezystor</strong> (unikaj wielu wymieszanych elementów obok siebie).</li>
+                <li><strong>Tło:</strong> Najlepiej umieścić rezystor na <strong>czystym, jednolitym tle</strong> (np. gładka kartka lub blat), bez rozpraszających przedmiotów.</li>
+            </ul>
+            <button class="close-btn" onclick="toggleModal()">Rozumiem</button>
         </div>
     </div>
 
-    <div id="cat-wrapper" class="cat-container searching">
-        <svg viewBox="0 0 230 160" width="100%" height="100%">
-            <g class="ear-left-group">
-                <path d="M 40 45 L 52 8 L 80 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-            </g>
-            <g class="ear-right-group">
-                <path d="M 190 45 L 178 8 L 150 34" fill="none" stroke="var(--accent-blue)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-            </g>
-            
-            <g id="eyebrows-searching">
-                <ellipse class="eyebrow-left" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-                <ellipse class="eyebrow-right" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            </g>
-
-            <g id="eyebrows-found" style="display: none;">
-                <ellipse class="eyebrow-left-found" cx="70" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
-                <ellipse class="eyebrow-right-found" cx="160" cy="45" rx="14" ry="5" fill="none" stroke="var(--accent-mint)" stroke-width="4" stroke-linecap="round"/>
-            </g>
-
-            <g id="eyes-searching">
-                <circle cx="70" cy="82" r="25" fill="var(--accent-blue)"/>
-                <circle cx="160" cy="82" r="25" fill="var(--accent-blue)"/>
-                <circle cx="70" cy="82" r="21" fill="var(--bg-color)"/>
-                <circle cx="62" cy="73" r="7" fill="#ffffff"/>
-                <circle cx="160" cy="82" r="21" fill="var(--bg-color)"/>
-                <circle cx="152" cy="73" r="7" fill="#ffffff"/>
-            </g>
-
-            <g id="eyes-found" style="display: none;">
-                <path d="M 48 82 Q 70 58 92 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
-                <path d="M 138 82 Q 160 58 182 82" fill="none" stroke="var(--accent-mint)" stroke-width="6" stroke-linecap="round"/>
-            </g>
-
-            <line x1="18" y1="92" x2="36" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="16" y1="103" x2="34" y2="102" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="20" y1="114" x2="36" y2="111" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-
-            <line x1="212" y1="92" x2="194" y2="89" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="214" y1="103" x2="196" y2="102" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="210" y1="114" x2="194" y2="111" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-
-            <polygon points="112,102 122,102 117,110" fill="var(--accent-blue)"/>
-
-            <g id="mouth-searching">
-                <path d="M 108 116 Q 113 121 117 116 Q 121 121 126 116" fill="none" stroke="var(--accent-blue)" stroke-width="4" stroke-linecap="round"/>
-            </g>
-
-            <g id="mouth-found" style="display: none;">
-                <path d="M 100 114 Q 117 138 134 114 Z" fill="var(--accent-mint)" stroke="var(--bg-color)" stroke-width="2" stroke-linejoin="round"/>
-                <polygon points="108,116 113,126 118,116" fill="#ffffff"/>
-            </g>
-        </svg>
+    <h2>ResiCat - Skaner Rezystorów</h2>
+    
+    <div id="app-container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
     </div>
-
-    <div class="camera-label">KAMERA</div>
-    <div id="camera-box" class="camera-box">
-        <video id="webcam" autoplay playsinline muted></video>
-        <canvas id="frozen-frame"></canvas>
-    </div>
-
-    <div id="info-card">
-        <div class="info-title">INFO:</div>
-        <div id="info-content"></div>
-    </div>
-
-    <div id="model-status">Inicjalizacja aplikacji...</div>
-    <canvas id="ai-canvas" width="320" height="320" style="display:none;"></canvas>
+    
+    <div id="status">Ładowanie modelu ONNX...</div>
 
     <script>
-        const CLASS_NAMES = [
-            "Czarny", "Brązowy", "Czerwony", "Pomarańczowy", 
-            "Żółty", "Zielony", "Niebieski", "Fioletowy", 
-            "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
-        ];
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
 
-        const COLOR_VALUES = {
-            "Czarny": { digit: 0, mult: 1, tempCoeff: 250 },
-            "Brązowy": { digit: 1, mult: 10, tol: 1, tempCoeff: 100 },
-            "Czerwony": { digit: 2, mult: 100, tol: 2, tempCoeff: 50 },
-            "Pomarańczowy": { digit: 3, mult: 1000, tempCoeff: 15 },
-            "Żółty": { digit: 4, mult: 10000, tempCoeff: 25 },
-            "Zielony": { digit: 5, mult: 100000, tol: 0.5, tempCoeff: 20 },
-            "Niebieski": { digit: 6, mult: 1000000, tol: 0.25, tempCoeff: 10 },
-            "Fioletowy": { digit: 7, mult: 10000000, tol: 0.1, tempCoeff: 5 },
-            "Szary": { digit: 8, mult: 100000000, tol: 0.05 },
-            "Biały": { digit: 9, mult: 1000000000 },
-            "Złoty": { mult: 0.1, tol: 5 },
-            "Srebrny": { mult: 0.01, tol: 10 }
-        };
+        let ortSession = null;
 
-        let session = null;     
-        let isScanning = false; 
-        let resistorStableCount = 0; 
-        let mediaStream = null;
-        let torchOn = false;
+        // Obsługa modala z instrukcją
+        function toggleModal() {
+            const modal = document.getElementById('info-modal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        }
 
-        const video = document.getElementById('webcam');
-        const frozenCanvas = document.getElementById('frozen-frame');
-        const aiCanvas = document.getElementById('ai-canvas');
-        const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
-
-        async function initApp() {
-            await startCamera();
-
+        // Uruchomienie kamery
+        async function setupCamera() {
             try {
-                document.getElementById('model-status').innerText = 'Ładowanie modelu AI...';
-                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
-                ort.env.wasm.numThreads = 1;
-                
-                session = await ort.InferenceSession.create('./best.onnx');
-                document.getElementById('model-status').innerText = 'AI gotowe • rozdzielczość 320x320';
-                
-                setSearchingUI(); 
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: 640, height: 640 },
+                    audio: false
+                });
+                video.srcObject = stream;
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => { resolve(video); };
+                });
+            } catch (err) {
+                statusDiv.innerText = "Błąd dostępu do kamery: " + err.message;
+            }
+        }
+
+        // Ładowanie modelu ONNX
+        async function loadModel() {
+            try {
+                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+                ortSession = await ort.InferenceSession.create('./best.onnx', { executionProviders: ['wasm'] });
+                statusDiv.innerText = "Model gotowy do skanowania!";
+                detectFrame();
             } catch (e) {
-                console.error("Błąd ładowania modelu:", e);
-                document.getElementById('model-status').innerText = 'Błąd wczytywania best.onnx (sprawdź plik)';
+                statusDiv.innerText = "Błąd ładowania model.onnx: " + e.message;
+                console.log(e);
             }
         }
 
-        async function startCamera() {
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' } 
-                });
-                video.srcObject = mediaStream;
-                video.onloadedmetadata = () => {
-                    isScanning = true;
-                    scanLoop(); 
-                };
-            } catch (err) {
-                console.error("Błąd kamery:", err);
-                document.getElementById('status-label').innerText = 'BRAK KAMERY';
-                document.getElementById('model-status').innerText = 'Zezwól przeglądarce na dostęp do aparatu.';
-            }
-        }
-
-        async function toggleFlashlight() {
-            if (!mediaStream) return;
-            const track = mediaStream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-
-            if (!capabilities.torch) {
-                alert("Twoja przeglądarka lub urządzenie nie obsługuje latarki w ten sposób.");
-                return;
-            }
-
-            try {
-                torchOn = !torchOn;
-                await track.applyConstraints({
-                    advanced: [{ torch: torchOn }]
-                });
-                updateFlashlightUI();
-            } catch (err) {
-                console.error("Nie udało się włączyć latarki:", err);
-            }
-        }
-
-        async function turnOffFlashlight() {
-            if (!mediaStream || !torchOn) return;
-            try {
-                const track = mediaStream.getVideoTracks()[0];
-                torchOn = false;
-                await track.applyConstraints({
-                    advanced: [{ torch: false }]
-                });
-                updateFlashlightUI();
-            } catch (err) {
-                console.error("Błąd wyłączania latarki:", err);
-            }
-        }
-
-        function updateFlashlightUI() {
-            const btn = document.getElementById('flashlight-btn');
-            if (torchOn) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        }
-
-        async function scanLoop() {
-            if (!isScanning) return;
-
-            if (!session) {
-                setTimeout(() => requestAnimationFrame(scanLoop), 200);
-                return;
-            }
+        // Główna pętla detekcji
+        async function detectFrame() {
+            if (!ortSession) return;
 
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                aiCtx.drawImage(video, 0, 0, 320, 320); 
-                const imgData = aiCtx.getImageData(0, 0, 320, 320).data;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const float32Data = new Float32Array(3 * 320 * 320);
-                for (let i = 0; i < 320 * 320; i++) {
-                    float32Data[i] = imgData[i * 4] / 255.0;                  
-                    float32Data[i + 320 * 320] = imgData[i * 4 + 1] / 255.0;  
-                    float32Data[i + 2 * 320 * 320] = imgData[i * 4 + 2] / 255.0;
-                }
-
-                const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, 320, 320]);
+                // Przetwarzanie obrazu pod YOLO (320x320)
+                const tensor = preprocess(canvas, 320, 320);
                 
                 try {
-                    const feeds = {};
-                    feeds[session.inputNames[0]] = inputTensor;
-                    const results = await session.run(feeds); 
-                    const output = results[session.outputNames[0]].data;
-                    const dims = results[session.outputNames[0]].dims;
-
-                    const detections = parseYOLOOutput(output, dims, 0.40); 
+                    const feeds = { images: tensor };
+                    const results = await ortSession.run(feeds);
+                    const output = results[Object.keys(results)[0]].data;
                     
-                    // Krok 1: Sprawdzamy czy model widzi główną klasę "Rezystor"
-                    const hasResistorObject = detections.some(d => d.label === "Rezystor");
-                    // Krok 2: Pobieramy wykryte paski kolorów
-                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
-
-                    // Wymóg: AI musi widzieć bryłę rezystora ORAZ minimum 3 paski kolorów w kadrze
-                    if (hasResistorObject && colorDetections.length >= 3) {
-                        resistorStableCount++;
-                        // Trzeba utrzymać w bezruchu przez ok. 3-4 klatki, żeby wyzwolić odczyt i zamrozić kadr
-                        if (resistorStableCount >= 3) {
-                            handleResistorFound(colorDetections); 
-                            return;
-                        }
-                    } else {
-                        // Szybkie resetowanie licznika, jeśli rezystor zniknie z kadru lub obraz się rozmyje
-                        resistorStableCount = Math.max(0, resistorStableCount - 1);
-                    }
+                    // Rysowanie wyników detekcji na ekranie
+                    renderBoxes(output, canvas.width, canvas.height);
                 } catch (err) {
-                    console.error("Błąd detekcji w pętli:", err);
+                    console.error("Błąd inferencji:", err);
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(scanLoop), 80); 
+            requestAnimationFrame(detectFrame);
         }
 
-        function parseYOLOOutput(data, dims, confThreshold) {
-            const numFeatures = dims[1];
-            const numAnchors = dims[2];
-            const numClasses = numFeatures - 4;
-            let found = [];
-
-            for (let i = 0; i < numAnchors; i++) {
-                let maxScore = 0;
-                let classId = -1;
-
-                for (let c = 0; c < numClasses; c++) {
-                    const score = data[(4 + c) * numAnchors + i];
-                    if (score > maxScore) {
-                        maxScore = score;
-                        classId = c;
-                    }
-                }
-
-                if (maxScore > confThreshold) {
-                    const label = CLASS_NAMES[classId] || `Klasa #${classId}`;
-                    const xCenter = data[i]; 
-                    if (!found.some(item => item.label === label)) {
-                        found.push({
-                            label: label,
-                            confidence: Math.round(maxScore * 100),
-                            x: xCenter
-                        });
-                    }
-                }
-            }
-            return found;
-        }
-
-        function calculateResistor(bands) {
-            bands.sort((a, b) => a.x - b.x);
-
-            const firstLabel = bands[0].label;
-            if (bands.length > 2 && (firstLabel === "Złoty" || firstLabel === "Srebrny")) {
-                bands.reverse();
-            }
-
-            let ohms = 0;
-            let tolerance = "±5%";
-            let tempCoeff = null;
-
-            if (bands.length >= 4) {
-                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
-                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
-                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                ohms = (d1 * 10 + d2) * mult;
-
-                const tolColor = bands[3].label;
-                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
-                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
-                }
-
-                if (bands.length >= 5) {
-                    const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
-                    const mult5 = COLOR_VALUES[bands[3].label]?.mult ?? 1;
-                    ohms = (d1 * 100 + d2 * 10 + d3) * mult5;
-                    const tolColor5 = bands[4].label;
-                    if (COLOR_VALUES[tolColor5]?.tol !== undefined) {
-                        tolerance = `±${COLOR_VALUES[tolColor5].tol}%`;
-                    }
-                }
-
-                if (bands.length >= 6) {
-                    const tcColor = bands[5].label;
-                    if (COLOR_VALUES[tcColor]?.tempCoeff) {
-                        tempCoeff = `${COLOR_VALUES[tcColor].tempCoeff} ppm/°C`;
-                    }
-                }
-            } else if (bands.length === 3) {
-                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
-                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
-                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
-                ohms = (d1 * 10 + d2) * mult;
-                tolerance = "±20%";
-            }
-
-            let formattedResistance = ohms + " Ω";
-            if (ohms >= 1000000) {
-                formattedResistance = (ohms / 1000000).toFixed(1).replace('.0', '') + " MΩ";
-            } else if (ohms >= 1000) {
-                formattedResistance = (ohms / 1000).toFixed(1).replace('.0', '') + " kΩ";
-            }
-
-            return {
-                resistance: formattedResistance,
-                tolerance: tolerance,
-                tempCoeff: tempCoeff,
-                orderedBands: bands
-            };
-        }
-
-        async function handleResistorFound(detections) {
-            isScanning = false;
-
-            // Automatyczne wyłączenie latarki w trybie sukcesu MAM!!!
-            await turnOffFlashlight();
-
-            frozenCanvas.width = video.videoWidth;
-            frozenCanvas.height = video.videoHeight;
-            const fCtx = frozenCanvas.getContext('2d');
-            fCtx.drawImage(video, 0, 0, frozenCanvas.width, frozenCanvas.height);
-
-            video.style.display = 'none';
-            frozenCanvas.style.display = 'block';
-
-            const statusLabel = document.getElementById('status-label');
-            statusLabel.innerText = 'MAM!!!';
-            document.getElementById('status-text').classList.add('found');
-
-            document.getElementById('reset-btn').style.display = 'block';
-            document.getElementById('camera-box').classList.add('found');
-
-            const cat = document.getElementById('cat-wrapper');
-            cat.classList.remove('searching');
-            cat.classList.add('found');
-
-            document.getElementById('eyebrows-searching').style.display = 'none';
-            document.getElementById('eyebrows-found').style.display = 'block';
-            document.getElementById('eyes-searching').style.display = 'none';
-            document.getElementById('eyes-found').style.display = 'block';
-            document.getElementById('mouth-searching').style.display = 'none';
-            document.getElementById('mouth-found').style.display = 'block';
-
-            const result = calculateResistor(detections);
-
-            const infoCard = document.getElementById('info-card');
-            const infoContent = document.getElementById('info-content');
+        // Przygotowanie tensora wejściowego do modelu
+        function preprocess(sourceCanvas, targetWidth, targetHeight) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = targetWidth;
+            tempCanvas.height = targetHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(sourceCanvas, 0, 0, targetWidth, targetHeight);
             
-            let html = `<div class="info-row">Wartość: <span>${result.resistance}</span></div>`;
-            html += `<div class="info-row">Tolerancja: <span>${result.tolerance}</span></div>`;
-            if (result.tempCoeff) {
-                html += `<div class="info-row">Współczynnik TK: <span>${result.tempCoeff}</span></div>`;
+            const imgData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
+            const pixels = imgData.data;
+
+            const red = new Float32Array(targetWidth * targetHeight);
+            const green = new Float32Array(targetWidth * targetHeight);
+            const blue = new Float32Array(targetWidth * targetHeight);
+
+            for (let i = 0; i < pixels.length / 4; i++) {
+                red[i] = pixels[i * 4] / 255.0;
+                green[i] = pixels[i * 4 + 1] / 255.0;
+                blue[i] = pixels[i * 4 + 2] / 255.0;
             }
-            html += `<hr style="border: 0; border-top: 1px solid #33334d; margin: 8px 0;">`;
-            html += `<div class="info-row" style="font-size: 13px; color: var(--text-muted);">Paski: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
-            
-            infoContent.innerHTML = html;
-            infoCard.style.display = 'block';
+
+            const input = new Float32Array(3 * targetWidth * targetHeight);
+            input.set(red, 0);
+            input.set(green, targetWidth * targetHeight);
+            input.set(blue, targetWidth * targetHeight * 2);
+
+            return new ort.Tensor('float32', input, [1, 3, targetHeight, targetWidth]);
         }
 
-        function resetScanner() {
-            frozenCanvas.style.display = 'none';
-            video.style.display = 'block';
-            document.getElementById('info-card').style.display = 'none';
-            resistorStableCount = 0;
-            setSearchingUI();
-            isScanning = true;
-            scanLoop();
+        // Rysowanie wykrytych obiektów (ramek)
+        function renderBoxes(output, imgWidth, imgHeight) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, imgWidth, imgHeight);
+
+            // Tutaj możesz dodać parsowanie tensorów wyjściowych YOLOv8 i rysowanie ramek prostokątnych na `ctx`
         }
 
-        function setSearchingUI() {
-            const statusLabel = document.getElementById('status-label');
-            statusLabel.innerText = 'SZUKAM...';
-            document.getElementById('status-text').classList.remove('found');
-
-            document.getElementById('reset-btn').style.display = 'none';
-            document.getElementById('camera-box').classList.remove('found');
-
-            const cat = document.getElementById('cat-wrapper');
-            cat.classList.remove('found');
-            cat.classList.add('searching');
-
-            document.getElementById('eyebrows-searching').style.display = 'block';
-            document.getElementById('eyebrows-found').style.display = 'none';
-            document.getElementById('eyes-searching').style.display = 'block';
-            document.getElementById('eyes-found').style.display = 'none';
-            document.getElementById('mouth-searching').style.display = 'block';
-            document.getElementById('mouth-found').style.display = 'none';
+        // Start aplikacji
+        async function main() {
+            await setupCamera();
+            await loadModel();
         }
 
-        initApp();
+        main();
     </script>
 </body>
 </html>
