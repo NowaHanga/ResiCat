@@ -216,9 +216,9 @@
         }
 
         #status-text {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 900;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
             color: var(--accent-yellow);
             text-transform: uppercase;
             margin: 0;
@@ -402,9 +402,9 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3>Jak skanować rezystory?</h3>
             <ul>
-                <li><strong>Tryb AUTO/MANUAL:</strong> W trybie AUTO model sam wykrywa paski, w MANUALie robisz zdjęcie przyciskiem na dole.</li>
-                <li><strong>Oświetlenie:</strong> Zapewnij dobre światło. Jeśli jest ciemno, <strong>włącz latarkę</strong>.</li>
-                <li><strong>Pojedynczy element:</strong> W kadrze musi znajdować się <strong>tylko 1 rezystor</strong>.</li>
+                <li><strong>Tryb AUTO:</strong> Przytrzymaj rezystor nieruchomo w kadrze przez 2 sekundy – aplikacja sama zrobi zdjęcie i odczyta wynik!</li>
+                <li><strong>Tryb MANUAL:</strong> Samodzielnie kadrujesz rezystor i klikasz zielony przycisk migawki na dole.</li>
+                <li><strong>Oświetlenie:</strong> Włącz latarkę przyciskiem na górze, jeśli jest ciemno.</li>
             </ul>
             <button class="close-btn" onclick="toggleModal()">Rozumiem</button>
         </div>
@@ -425,7 +425,7 @@
         </h1>
         
         <div class="mode-selector">
-            <button id="btn-auto" class="mode-btn active" onclick="setMode('auto')">Auto</button>
+            <button id="btn-auto" class="mode-btn active" onclick="setMode('auto')">Auto (2s)</button>
             <button id="btn-manual" class="mode-btn" onclick="setMode('manual')">Manual</button>
         </div>
     </header>
@@ -439,7 +439,7 @@
         </button>
         <div id="status-container">
             <h1 id="status-text">
-                <span id="status-label">START...</span>
+                <span id="status-label">SZUKAM...</span>
             </h1>
             <button id="reset-btn" onclick="resetScanner()">Szukaj ponownie</button>
         </div>
@@ -542,7 +542,7 @@
 
         let session = null;     
         let isScanning = false; 
-        let resistorStableCount = 0; 
+        let autoHoldStartTime = null; // Czas przytrzymania w trybie auto
         let mediaStream = null;
         let torchOn = false;
         let currentMode = 'auto'; 
@@ -560,6 +560,7 @@
 
         function setMode(mode) {
             currentMode = mode;
+            autoHoldStartTime = null;
             document.getElementById('btn-auto').classList.toggle('active', mode === 'auto');
             document.getElementById('btn-manual').classList.toggle('active', mode === 'manual');
             setSearchingUI();
@@ -666,21 +667,31 @@
                     const dims = results[session.outputNames[0]].dims;
 
                     const detections = parseYOLOOutput(output, dims, 0.28); 
-                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
+                    const colorDetections = detections.filter(d => d.label !== "Rezystor" && !(d.label === "Biały" && d.confidence < 50));
                     
                     latestDetections = colorDetections;
 
                     if (currentMode === 'auto') {
-                        // W trybie auto akceptujemy od 3 pasków w górę
                         if (colorDetections.length >= 3) {
                             colorDetections.sort((a, b) => a.x - b.x);
-                            resistorStableCount++;
-                            if (resistorStableCount >= 2) {
-                                await handleResistorFound(colorDetections); 
-                                return;
+                            
+                            // Logika przytrzymania przez 2 sekundy
+                            if (!autoHoldStartTime) {
+                                autoHoldStartTime = Date.now();
+                                document.getElementById('status-label').innerText = 'TRZYMAJ... (2s)';
+                            } else {
+                                const elapsed = Date.now() - autoHoldStartTime;
+                                const timeLeft = Math.max(0, ((2000 - elapsed) / 1000)).toFixed(1);
+                                document.getElementById('status-label').innerText = `TRZYMAJ (${timeLeft}s)`;
+
+                                if (elapsed >= 2000) {
+                                    await handleResistorFound(colorDetections);
+                                    return;
+                                }
                             }
                         } else {
-                            resistorStableCount = Math.max(0, resistorStableCount - 1);
+                            autoHoldStartTime = null;
+                            document.getElementById('status-label').innerText = 'SZUKAM...';
                         }
                     }
                 } catch (err) {
@@ -743,7 +754,6 @@
         function calculateResistor(bands) {
             bands.sort((a, b) => a.x - b.x);
 
-            // Poprawna orientacja rezystora (jeśli na końcu jest złoty/srebrny pas tolerancji)
             const lastLabel = bands[bands.length - 1].label;
             const firstLabel = bands[0].label;
             if ((firstLabel === "Złoty" || firstLabel === "Srebrny") && lastLabel !== "Złoty" && lastLabel !== "Srebrny") {
@@ -761,7 +771,6 @@
                 const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
                 ohms = (d1 * 10 + d2) * mult;
 
-                // Czwarty pasek to tolerancja (np. Złoty = ±5%, Srebrny = ±10% lub inne kolory)
                 const tolColor = bands[3].label;
                 if (COLOR_VALUES[tolColor]?.tol !== undefined) {
                     tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
@@ -809,8 +818,8 @@
 
         async function handleResistorFound(detections) {
             isScanning = false;
+            autoHoldStartTime = null;
 
-            // Wyłączenie latarki po znalezieniu/zrobieniu zdjęcia w obu trybach
             await turnOffFlashlight();
 
             frozenCanvas.width = video.videoWidth;
@@ -864,13 +873,14 @@
             frozenCanvas.style.display = 'none';
             video.style.display = 'block';
             document.getElementById('info-card').style.display = 'none';
-            resistorStableCount = 0;
+            autoHoldStartTime = null;
             setSearchingUI();
             isScanning = true;
             scanLoop();
         }
 
         function setSearchingUI() {
+            autoHoldStartTime = null;
             const statusLabel = document.getElementById('status-label');
             statusLabel.innerText = currentMode === 'manual' ? 'MANUAL' : 'SZUKAM...';
             document.getElementById('status-text').classList.remove('found');
