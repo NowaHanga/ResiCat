@@ -453,7 +453,7 @@
     </div>
 
     <div id="info-card">
-        <div class="info-title">INFO:</div>
+        <div class="info-title">WYNIK POMIARU:</div>
         <div id="info-content"></div>
     </div>
 
@@ -462,7 +462,9 @@
 
     <script>
         const CLASS_NAMES = [
-            "1", "10", "100", "1k", "2.2k", "4.7k", "10k", "22k", "47k", "100k", "220k", "1M"
+            "Czarny", "Brązowy", "Czerwony", "Pomarańczowy", 
+            "Żółty", "Zielony", "Niebieski", "Fioletowy", 
+            "Szary", "Biały", "Złoty", "Srebrny", "Rezystor"
         ];
 
         const COLOR_VALUES = {
@@ -527,7 +529,7 @@
             } catch (err) {
                 console.error("Błąd kamery:", err);
                 document.getElementById('status-label').innerText = 'BRAK KAMERY';
-                document.getElementById('model-status').innerText = 'Zezwól przeglądarce na dostęp do aparatu.';
+                document.getElementById('model-status').innerText = 'Zezwól przeglądarki na dostęp do aparatu.';
             }
         }
 
@@ -604,11 +606,13 @@
                     const dims = results[session.outputNames[0]].dims;
 
                     const detections = parseYOLOOutput(output, dims, 0.35); 
+                    const colorDetections = detections.filter(d => d.label !== "Rezystor");
 
-                    if (detections.length > 0) {
+                    if (colorDetections.length >= 3) {
+                        colorDetections.sort((a, b) => a.x - b.x);
                         resistorStableCount++;
                         if (resistorStableCount >= 2) {
-                            handleResistorFound(detections); 
+                            handleResistorFound(colorDetections); 
                             return;
                         }
                     } else {
@@ -655,6 +659,70 @@
             return found;
         }
 
+        function calculateResistor(bands) {
+            bands.sort((a, b) => a.x - b.x);
+
+            const firstLabel = bands[0].label;
+            if (bands.length > 2 && (firstLabel === "Złoty" || firstLabel === "Srebrny")) {
+                bands.reverse();
+            }
+
+            let ohms = 0;
+            let tolerance = "±5%";
+            let tempCoeff = null;
+            let totalConfidence = Math.round(bands.reduce((sum, b) => sum + b.confidence, 0) / bands.length);
+
+            if (bands.length >= 4) {
+                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
+                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
+                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
+                ohms = (d1 * 10 + d2) * mult;
+
+                const tolColor = bands[3].label;
+                if (COLOR_VALUES[tolColor]?.tol !== undefined) {
+                    tolerance = `±${COLOR_VALUES[tolColor].tol}%`;
+                }
+
+                if (bands.length >= 5) {
+                    const d3 = COLOR_VALUES[bands[2].label]?.digit ?? 0;
+                    const mult5 = COLOR_VALUES[bands[3].label]?.mult ?? 1;
+                    ohms = (d1 * 100 + d2 * 10 + d3) * mult5;
+                    const tolColor5 = bands[4].label;
+                    if (COLOR_VALUES[tolColor5]?.tol !== undefined) {
+                        tolerance = `±${COLOR_VALUES[tolColor5].tol}%`;
+                    }
+                }
+
+                if (bands.length >= 6) {
+                    const tcColor = bands[5].label;
+                    if (COLOR_VALUES[tcColor]?.tempCoeff) {
+                        tempCoeff = `${COLOR_VALUES[tcColor].tempCoeff} ppm/°C`;
+                    }
+                }
+            } else if (bands.length === 3) {
+                const d1 = COLOR_VALUES[bands[0].label]?.digit ?? 0;
+                const d2 = COLOR_VALUES[bands[1].label]?.digit ?? 0;
+                const mult = COLOR_VALUES[bands[2].label]?.mult ?? 1;
+                ohms = (d1 * 10 + d2) * mult;
+                tolerance = "±20%";
+            }
+
+            let formattedResistance = ohms + " Ω";
+            if (ohms >= 1000000) {
+                formattedResistance = (ohms / 1000000).toFixed(1).replace('.0', '') + " MΩ";
+            } else if (ohms >= 1000) {
+                formattedResistance = (ohms / 1000).toFixed(1).replace('.0', '') + " kΩ";
+            }
+
+            return {
+                resistance: formattedResistance,
+                tolerance: tolerance,
+                tempCoeff: tempCoeff,
+                confidence: totalConfidence,
+                orderedBands: bands
+            };
+        }
+
         async function handleResistorFound(detections) {
             isScanning = false;
 
@@ -686,14 +754,21 @@
             document.getElementById('mouth-searching').style.display = 'none';
             document.getElementById('mouth-found').style.display = 'block';
 
-            // Pobieramy wykrytą klasę rezystora
-            const detectedItem = detections.reduce((prev, current) => (prev.confidence > current.confidence) ? prev : current);
+            const result = calculateResistor(detections);
 
             const infoCard = document.getElementById('info-card');
             const infoContent = document.getElementById('info-content');
             
-            let html = `<div class="info-row">Wartość rezystora: <span>${detectedItem.label}</span></div>`;
-            html += `<div class="info-row">Pewność modelu: <span>${detectedItem.confidence}%</span></div>`;
+            let html = `<div class="info-row">Wartość: <span>${result.resistance}</span></div>`;
+            html += `<div class="info-row">Tolerancja: <span>${result.tolerance}</span></div>`;
+            if (result.tempCoeff) {
+                html += `<div class="info-row">Współczynnik TK: <span>${result.tempCoeff}</span></div>`;
+            } else {
+                html += `<div class="info-row">Współczynnik TK: <span>Brak / Standard</span></div>`;
+            }
+            html += `<div class="info-row">Pewność modelu: <span>${result.confidence}%</span></div>`;
+            html += `<hr style="border: 0; border-top: 1px solid #33334d; margin: 8px 0;">`;
+            html += `<div class="info-row" style="font-size: 13px; color: var(--text-muted);">Kolejność pasków: ${result.orderedBands.map(b => b.label).join(', ')}</div>`;
             
             infoContent.innerHTML = html;
             infoCard.style.display = 'block';
